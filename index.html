@@ -1196,54 +1196,139 @@ function rebuildLabelDom(){
   labelEls=landmarks.map(lm=>{const el=document.createElement('div');el.className='map-label';el.textContent=lm.name;el._lm=lm;layer.appendChild(el);return el});
 }
 
-/* ---- Terrain + 401 ---- */
+/* ---- Terrain: Hamilton → Oshawa GTA corridor (open-geo silhouette) ----
+   x: west→east  Hamilton…Mississauga…Toronto…Scarborough…Oshawa
+   y: north→south  inland → Lake Ontario
+*/
+function gtaShoreY(x){
+  const t=x/(COLS-1);
+  /* Base lake occupies southern band */
+  let shore=Math.floor(ROWS*0.76);
+  /* Hamilton Harbour / Burlington Bay — water cuts north into land (west) */
+  if(t<0.12){
+    const u=t/0.12;
+    const bay=Math.sin(u*Math.PI);
+    shore-=Math.round(5+bay*5); /* harbour notch */
+    if(u<0.35) shore-=Math.round((0.35-u)*8); /* west spit / harbour mouth */
+  }
+  /* Burlington–Oakville–Mississauga: gentle SW–NE lake curve */
+  else if(t<0.38){
+    shore+=Math.round(Math.sin((t-0.12)/0.26*Math.PI)*1.8)-1;
+  }
+  /* Toronto Harbour indentation (central waterfront) */
+  else if(t<0.58){
+    const u=(t-0.38)/0.20;
+    const harbour=Math.sin(u*Math.PI);
+    shore-=Math.round(3+harbour*5); /* deep harbour notch for islands */
+  }
+  /* Scarborough Bluffs — shoreline steps south, cliff face */
+  else if(t<0.72){
+    shore+=Math.round(2+Math.sin((t-0.58)/0.14*Math.PI)*2);
+  }
+  /* Durham (Pickering–Oshawa) along lake */
+  else{
+    shore+=Math.round(1+Math.sin((t-0.72)/0.28*Math.PI)*1.5);
+  }
+  shore+=Math.round((noise2(x*0.31, 2)-0.5)*1.4);
+  return clamp(shore, Math.floor(ROWS*0.52), ROWS-3);
+}
+
+function carveRiver(startX, mouthY, amp, freq, halfW, seed){
+  let rx=startX;
+  for(let y=0;y<mouthY;y++){
+    rx+=Math.round(Math.sin(y*freq+seed)*amp+(noise2(y*0.2,seed)-0.5)*0.8);
+    const w=y<mouthY*0.25?halfW+1:(y>mouthY*0.75?halfW+1:halfW);
+    for(let k=-w;k<=w;k++){
+      const xx=rx+k;
+      if(inBounds(xx,y)&&grid[xx][y].terrain==='land'){
+        grid[xx][y].terrain='ravine';
+        grid[xx][y].landValue=22;
+        grid[xx][y].elev=-0.42;
+      }
+    }
+  }
+}
+
 function makeTerrain(){
   grid=[]; landmarks=[];
   for(let x=0;x<COLS;x++){grid[x]=[];for(let y=0;y<ROWS;y++){
-    grid[x][y]={terrain:'land',type:'empty',level:0,landValue:40,pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,parkId:null,parkName:null,spec:null,island:false,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false};
+    grid[x][y]={terrain:'land',type:'empty',level:0,landValue:40,pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,parkId:null,parkName:null,spec:null,island:false,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false,elev:0};
   }}
-  // Lake Ontario
+
+  /* Lake Ontario + Hamilton Harbour bay */
+  const shoreAt=[];
   for(let x=0;x<COLS;x++){
-    let shore=ROWS-7+Math.round(Math.sin((x/COLS)*Math.PI)*2.2)+Math.round(Math.sin(x*0.09)*1.1);
-    if(x>COLS*0.78) shore-=Math.round((x-COLS*0.78)*0.15);
-    if(x<COLS*0.12) shore-=1;
-    for(let y=shore;y<ROWS;y++){grid[x][y].terrain='water';grid[x][y].landValue=0}
-  }
-  // Toronto Islands — distinct green parcels
-  const icx=Math.floor(COLS*0.48), icy=ROWS-4;
-  for(let x=icx-8;x<=icx+10;x++)for(let y=icy-2;y<=icy+1;y++){
-    if(!inBounds(x,y)) continue;
-    const dx=(x-icx)/9, dy=(y-icy)/2;
-    if(dx*dx+dy*dy<1.05+noise2(x,y)*0.15){
-      grid[x][y].terrain='land';grid[x][y].type='empty';grid[x][y].landValue=58;grid[x][y].island=true;
+    const shore=gtaShoreY(x);
+    shoreAt[x]=shore;
+    for(let y=shore;y<ROWS;y++){
+      grid[x][y].terrain='water';
+      grid[x][y].landValue=0;
+      grid[x][y].elev=-0.55;
     }
   }
-  for(let y=ROWS-6;y<ROWS-3;y++){if(inBounds(icx-2,y))grid[icx-2][y].terrain='water';if(inBounds(icx+3,y))grid[icx+3][y].terrain='water'}
-  // Don Valley
-  let rx=Math.floor(COLS*0.62);
-  for(let y=0;y<ROWS-6;y++){
-    rx+=Math.round(Math.sin(y*0.28)*1.4-0.08);
-    const w=y<12?2:(y<30?1:2);
-    for(let k=-w;k<=w;k++){const xx=rx+k;if(inBounds(xx,y)&&grid[xx][y].terrain==='land'){grid[xx][y].terrain='ravine';grid[xx][y].landValue=25}}
+  /* Extra Hamilton harbour pocket (west inland lagoon feel) */
+  for(let x=0;x<Math.floor(COLS*0.10);x++){
+    for(let y=Math.floor(ROWS*0.62);y<shoreAt[x];y++){
+      if(noise2(x*0.4,y*0.3)>0.35){
+        grid[x][y].terrain='water'; grid[x][y].landValue=0; grid[x][y].elev=-0.5;
+      }
+    }
   }
-  // Humber
-  let hx=Math.floor(COLS*0.14);
-  for(let y=0;y<ROWS-5;y++){
-    hx+=Math.round(Math.sin(y*0.22+1)*0.9);
-    for(let k=-1;k<=1;k++){const xx=hx+k;if(inBounds(xx,y)&&grid[xx][y].terrain==='land')grid[xx][y].terrain='ravine'}
+
+  /* Toronto Islands in harbour notch */
+  const icx=Math.floor(COLS*0.48), icy=ROWS-5;
+  for(let x=icx-9;x<=icx+11;x++)for(let y=icy-2;y<=icy+2;y++){
+    if(!inBounds(x,y)) continue;
+    const dx=(x-icx)/10, dy=(y-icy)/2.2;
+    if(dx*dx+dy*dy<1.05+noise2(x,y)*0.18){
+      grid[x][y].terrain='land'; grid[x][y].type='empty';
+      grid[x][y].landValue=56; grid[x][y].island=true; grid[x][y].elev=0.06;
+    }
   }
-  // Land values (CBD gravity)
-  const dtx=Math.floor(COLS*0.48), dty=Math.floor(ROWS*0.72);
+  /* Ferry channels through islands */
+  for(let y=ROWS-7;y<ROWS-3;y++){
+    if(inBounds(icx-2,y)){ grid[icx-2][y].terrain='water'; grid[icx-2][y].island=false; grid[icx-2][y].elev=-0.5; }
+    if(inBounds(icx+3,y)){ grid[icx+3][y].terrain='water'; grid[icx+3][y].island=false; grid[icx+3][y].elev=-0.5; }
+  }
+
+  /* Rivers / ravines cutting to the lake (west→east) */
+  carveRiver(Math.floor(COLS*0.26), shoreAt[Math.floor(COLS*0.26)]||Math.floor(ROWS*0.75), 0.7, 0.20, 1, 1.1); /* Credit */
+  carveRiver(Math.floor(COLS*0.36), shoreAt[Math.floor(COLS*0.36)]||Math.floor(ROWS*0.72), 0.9, 0.22, 1, 2.3); /* Humber */
+  carveRiver(Math.floor(COLS*0.54), shoreAt[Math.floor(COLS*0.54)]||Math.floor(ROWS*0.70), 1.3, 0.26, 2, 0.7); /* Don */
+  carveRiver(Math.floor(COLS*0.68), shoreAt[Math.floor(COLS*0.68)]||Math.floor(ROWS*0.78), 0.8, 0.24, 1, 3.1); /* Rouge */
+  carveRiver(Math.floor(COLS*0.78), shoreAt[Math.floor(COLS*0.78)]||Math.floor(ROWS*0.78), 0.6, 0.28, 1, 4.0); /* Duffins */
+  carveRiver(Math.floor(COLS*0.92), shoreAt[Math.floor(COLS*0.92)]||Math.floor(ROWS*0.78), 0.55, 0.25, 1, 5.2); /* Oshawa Creek */
+
+  /* 3D relief: lakeshore low, inland rise, Scarborough bluffs cliff, CBD plateau */
+  const dtx=Math.floor(COLS*0.48), dty=Math.floor(ROWS*0.68);
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    if(grid[x][y].terrain!=='land') continue;
-    let v=32+Math.max(0,38-Math.hypot(x-dtx,y-dty)*1.6);
-    if(nearTerrain(x,y,'water',3)) v+=18;
-    if(nearTerrain(x,y,'ravine',2)) v+=8;
-    if(y<ROWS*0.35) v-=4;
-    grid[x][y].landValue=clamp(Math.round(v+noise2(x,y)*8),15,95);
+    const t=grid[x][y];
+    if(t.terrain==='water'){ t.elev=-0.55; continue; }
+    if(t.terrain==='ravine'){ t.elev=-0.42; continue; }
+    if(t.island){ t.elev=0.06; continue; }
+    const shore=shoreAt[x]||Math.floor(ROWS*0.76);
+    const distShore=Math.max(0, shore-y);
+    let elev=0.04+Math.min(0.38, distShore*0.014);
+    /* Niagara Escarpment hint — western inland rise (Hamilton–Burlington) */
+    if(x<COLS*0.16 && y<ROWS*0.55) elev+=0.12+noise2(x,y)*0.04;
+    /* Scarborough Bluffs: high land right at shore */
+    if(x>COLS*0.60 && x<COLS*0.74 && distShore<=4 && distShore>=0) elev=Math.max(elev, 0.32);
+    /* Soft micro-relief */
+    elev+=(noise2(x*0.17,y*0.19)-0.5)*0.05;
+    t.elev=elev;
+    /* Land values — CBD gravity + waterfront premium */
+    let v=28+Math.max(0,42-Math.hypot(x-dtx,y-dty)*1.45);
+    if(nearTerrain(x,y,'water',3)) v+=16;
+    if(nearTerrain(x,y,'ravine',2)) v+=7;
+    if(y<ROWS*0.32) v-=5; /* northern suburbs cheaper */
+    if(x<COLS*0.18) v-=4; /* west end slightly lower density pressure */
+    if(x>COLS*0.75) v-=3; /* Durham */
+    if(t.island) v=56;
+    t.landValue=clamp(Math.round(v+noise2(x,y)*8),15,95);
   }
-  // HIGHWAY 401 — optional by game mode
-  const y401=Math.floor(ROWS*0.28);
+
+  /* Highway 401 — east–west spine across the corridor */
+  const y401=Math.floor(ROWS*0.30);
   if(gameSettings.with401!==false){
     for(let x=0;x<COLS;x++){
       const cell=grid[x][y401];
@@ -1252,6 +1337,7 @@ function makeTerrain(){
       cell.level=0;
     }
   }
+  cityCenter={x:COLS*0.48, y:ROWS*0.68};
   placeLabels(y401);
   worldDirty=true; structuresDirty=true;
 }
@@ -1259,18 +1345,24 @@ function makeTerrain(){
 function placeLabels(y401){
   landmarks=[
     gameSettings.with401!==false ? [Math.floor(COLS*0.48), y401, 'Highway 401'] : null,
-    [Math.floor(COLS*0.48), Math.floor(ROWS*0.72), 'Downtown'],
-    [Math.floor(COLS*0.55), Math.floor(ROWS*0.78), 'Distillery'],
-    [Math.floor(COLS*0.22), Math.floor(ROWS*0.55), 'High Park'],
-    [Math.floor(COLS*0.48), ROWS-3, 'Toronto Islands'],
-    [Math.floor(COLS*0.85), Math.floor(ROWS*0.82), 'Scarborough Bluffs'],
-    [Math.floor(COLS*0.12), Math.floor(ROWS*0.75), 'Humber Bay'],
-    [Math.floor(COLS*0.50), Math.floor(ROWS*0.42), 'Yonge Corridor'],
-    [Math.floor(COLS*0.38), Math.floor(ROWS*0.35), 'Yorkville'],
-    [Math.floor(COLS*0.62), 8, 'Don Valley'],
-    [Math.floor(COLS*0.48), Math.floor(ROWS*0.68), 'Harbourfront'],
-    [Math.floor(COLS*0.70), Math.floor(ROWS*0.50), 'East York'],
-    [Math.floor(COLS*0.28), Math.floor(ROWS*0.40), 'The Annex'],
+    [Math.floor(COLS*0.05), Math.floor(ROWS*0.55), 'Hamilton'],
+    [Math.floor(COLS*0.12), Math.floor(ROWS*0.62), 'Burlington'],
+    [Math.floor(COLS*0.22), Math.floor(ROWS*0.58), 'Oakville'],
+    [Math.floor(COLS*0.30), Math.floor(ROWS*0.55), 'Mississauga'],
+    [Math.floor(COLS*0.36), Math.floor(ROWS*0.50), 'Humber'],
+    [Math.floor(COLS*0.40), Math.floor(ROWS*0.58), 'Etobicoke'],
+    [Math.floor(COLS*0.48), Math.floor(ROWS*0.68), 'Downtown Toronto'],
+    [Math.floor(COLS*0.48), Math.floor(ROWS*0.62), 'Harbourfront'],
+    [Math.floor(COLS*0.48), ROWS-4, 'Toronto Islands'],
+    [Math.floor(COLS*0.50), Math.floor(ROWS*0.40), 'North York'],
+    [Math.floor(COLS*0.54), Math.floor(ROWS*0.35), 'Don Valley'],
+    [Math.floor(COLS*0.64), Math.floor(ROWS*0.55), 'Scarborough'],
+    [Math.floor(COLS*0.68), Math.floor(ROWS*0.72), 'Bluffs'],
+    [Math.floor(COLS*0.74), Math.floor(ROWS*0.58), 'Pickering'],
+    [Math.floor(COLS*0.80), Math.floor(ROWS*0.55), 'Ajax'],
+    [Math.floor(COLS*0.86), Math.floor(ROWS*0.55), 'Whitby'],
+    [Math.floor(COLS*0.94), Math.floor(ROWS*0.55), 'Oshawa'],
+    [Math.floor(COLS*0.50), ROWS-2, 'Lake Ontario'],
   ].filter(Boolean).filter(([x,y])=>inBounds(x,y)).map(([x,y,name])=>({x,y,name}));
   rebuildLabelDom();
 }
@@ -2180,31 +2272,35 @@ function refreshGroundInstances(){
   hideMat.setPosition(0,-40,0);
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y];
-    let h=0.18,y0=0.09;
+    const elev=t.elev||0;
     if(t.terrain==='water'){
       const shore=nearTerrain(x,y,'land',1)||nearTerrain(x,y,'ravine',1);
-      h=shore?0.12:0.08; y0=shore?-0.22:-0.38;
+      const h=shore?0.14:0.09;
+      const y0=shore?-0.28:-0.48;
       _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       groundWaterMesh.setMatrixAt(iWater++,_dummy.matrix);
     } else if(t.terrain==='ravine'){
-      h=0.12; y0=-0.32;
+      const h=0.14; const y0=elev-0.08; /* recessed river channel */
       _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       groundRavineMesh.setMatrixAt(iRav++,_dummy.matrix);
     } else if(t.island){
-      h=0.22; y0=0.11;
+      const h=0.2; const y0=0.08+elev;
       _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       groundIslandMesh.setMatrixAt(iIsland++,_dummy.matrix);
     } else if(nearTerrain(x,y,'water',1)){
-      const lvBoost=(t.landValue||40)>70?0.04:0;
-      _dummy.position.set(x+0.5,y0+lvBoost,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      /* Shore / bluff face — slightly thicker for cliff read */
+      const bluff=x>COLS*0.60&&x<COLS*0.74;
+      const h=bluff?0.28:0.16;
+      const y0=elev+(bluff?0.08:0.02);
+      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       groundShoreMesh.setMatrixAt(iShore++,_dummy.matrix);
     } else if((t.landValue||40)>62){
-      const lvBoost=0.04;
-      _dummy.position.set(x+0.5,y0+lvBoost,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      const h=0.18+Math.min(0.12, elev*0.35);
+      _dummy.position.set(x+0.5, elev+0.06, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       groundUrbanMesh.setMatrixAt(iUrban++,_dummy.matrix);
     } else {
-      const lvBoost=(t.landValue||40)>70?0.04:0;
-      _dummy.position.set(x+0.5,y0+lvBoost,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      const h=0.16+Math.min(0.14, elev*0.4);
+      _dummy.position.set(x+0.5, elev+0.05, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       groundMesh.setMatrixAt(iLand++,_dummy.matrix);
     }
   }
@@ -2336,7 +2432,8 @@ function upsertStructure(x,y){
   const def=toolById[t.type];
   const h=structureHeight(t);
   const bridge=def&&def.bridge;
-  const elev=isRoad(t)?roadDeckElev(x,y,t):(bridge?0.68:0.12);
+  const groundElev=(t.elev!=null)?t.elev:0;
+  const elev=isRoad(t)?roadDeckElev(x,y,t):(bridge?0.68:0.12+Math.max(0, groundElev));
   let mesh;
 
   /* ---- CN Tower ploppable ---- */
@@ -2467,7 +2564,7 @@ function upsertStructure(x,y){
         boxGeo(alongX?0.56:laneW, deckH, alongX?laneW:0.56),
         asphalt
       );
-      arm.position.set(dirs[di][0]*0.5, deckH/2+dElev*0.25, dirs[di][1]*0.5);
+      arm.position.set(dirs[di][0]*0.5, deckH/2+dElev*0.25-0.002, dirs[di][1]*0.5);
       g.add(arm);
       if(Math.abs(dElev)>0.06){
         for(let s=1;s<=3;s++){
@@ -2496,58 +2593,27 @@ function upsertStructure(x,y){
         g.add(fillet);
       }
     }
-    /* Two-way center line — ONLY along travel axis on straights/ends (not junctions) */
-    const markY=deckH+0.012;
-    if(straightEW || (isEnd && (linked[0]||linked[1]))){
+    /* Clean markings: ONE dashed center line on straights only (no edge hashes / curve ticks / floating curbs) */
+    const markY=deckH+0.025;
+    const markMat=wide?yellowMat:lineMat;
+    markMat.polygonOffset=true; markMat.polygonOffsetFactor=-2; markMat.polygonOffsetUnits=-2;
+    if(straightEW){
       for(let k=-1;k<=1;k++){
-        const dash=new THREE.Mesh(boxGeo(0.2,0.01,0.04), (wide?yellowMat:lineMat));
-        dash.position.set(k*0.28, markY, 0); g.add(dash);
+        const dash=new THREE.Mesh(boxGeo(0.18,0.008,0.035), markMat);
+        dash.position.set(k*0.3, markY, 0); g.add(dash);
       }
-    } else if(straightNS || (isEnd && (linked[2]||linked[3]))){
+    } else if(straightNS){
       for(let k=-1;k<=1;k++){
-        const dash=new THREE.Mesh(boxGeo(0.04,0.01,0.2), (wide?yellowMat:lineMat));
-        dash.position.set(0, markY, k*0.28); g.add(dash);
-      }
-    } else if(isCurve){
-      /* Short chevron on curve — no full cross line cars would drive over */
-      const tick=new THREE.Mesh(boxGeo(0.08,0.01,0.08), lineMat);
-      tick.position.set(0, markY, 0); g.add(tick);
-    }
-    /* Highway edge hash — oriented to road, not a one-way strip */
-    if(t.type==='highway'||t.type==='hwybridge'){
-      if(straightEW || (linked[0]||linked[1])){
-        [-1,1].forEach(side=>{
-          const edge=new THREE.Mesh(boxGeo(0.7,0.008,0.03), yellowMat);
-          edge.position.set(0, markY, side*(laneW*0.42)); g.add(edge);
-        });
-      } else {
-        [-1,1].forEach(side=>{
-          const edge=new THREE.Mesh(boxGeo(0.03,0.008,0.7), yellowMat);
-          edge.position.set(side*(laneW*0.42), markY, 0); g.add(edge);
-        });
+        const dash=new THREE.Mesh(boxGeo(0.035,0.008,0.18), markMat);
+        dash.position.set(0, markY, k*0.3); g.add(dash);
       }
     }
-    if(t.type==='transit'||t.type==='transitbridge'){
+    if((t.type==='transit'||t.type==='transitbridge')&&(straightEW||straightNS)){
       const stripe=new THREE.Mesh(
-        straightEW||(!(linked[2]||linked[3])&&(linked[0]||linked[1]))
-          ? boxGeo(0.7,0.01,0.1) : boxGeo(0.1,0.01,0.7),
+        straightEW?boxGeo(0.55,0.008,0.07):boxGeo(0.07,0.008,0.55),
         mat(0xd0122d,1,'flat')
       );
-      stripe.position.y=markY; g.add(stripe);
-    }
-    /* Curbs on open edges only */
-    for(let di=0;di<4;di++){
-      if(linked[di]) continue;
-      const alongX=dirs[di][0]!==0;
-      const curb=new THREE.Mesh(cylGeo(0.03,0.03,laneW*0.9,6), curbMat);
-      if(alongX){
-        curb.rotation.z=Math.PI/2;
-        curb.position.set(dirs[di][0]*(laneW*0.5+0.02), deckH+0.02, 0);
-      } else {
-        curb.rotation.x=Math.PI/2;
-        curb.position.set(0, deckH+0.02, dirs[di][1]*(laneW*0.5+0.02));
-      }
-      g.add(curb);
+      stripe.position.y=markY+0.001; g.add(stripe);
     }
     if(overWater){
       const pierH=Math.max(0.42, elev+0.12);
@@ -3709,7 +3775,7 @@ document.getElementById('btn-load').onclick=()=>{
       if(grid[x][y].type==='cntower') milestones.cntower=true;
       if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
     }
-    placeLabels(Math.floor(ROWS*0.28)); worldDirty=true; structuresDirty=true; applySeasonLook();
+    placeLabels(Math.floor(ROWS*0.30)); worldDirty=true; structuresDirty=true; applySeasonLook();
     recomputeUtilities(); updateUI(1,1,1); renderGoals(); renderToolbar(); applyTutorialFocus();
     log('Loaded.');
   }catch(e){log('Load failed',true)}
@@ -3752,7 +3818,7 @@ function applyNewGame(settings){
         if(grid[x][y].type==='cntower') milestones.cntower=true;
         if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
       }
-      placeLabels(Math.floor(ROWS*0.28));
+      placeLabels(Math.floor(ROWS*0.30));
       logEl.innerHTML=''; log('Continued saved city.');
     }catch(e){
       makeTerrain();
@@ -3851,7 +3917,7 @@ if(gameSettings.continueSave){
         if(tp==='cntower') milestones.cntower=true;
         if(tp==='airport'||tp==='stadium') milestones.landmark=true;
       }
-      placeLabels(Math.floor(ROWS*0.28)); worldDirty=true; structuresDirty=true; applySeasonLook(); recomputeUtilities(); updateUI(1,1,1);
+      placeLabels(Math.floor(ROWS*0.30)); worldDirty=true; structuresDirty=true; applySeasonLook(); recomputeUtilities(); updateUI(1,1,1);
       renderGoals(); renderToolbar();
       if(guideEl) guideEl.classList.add('hidden');
       log('Continued saved city.');
