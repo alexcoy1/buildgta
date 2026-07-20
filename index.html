@@ -5,144 +5,383 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Metro Builder: Toronto</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Syne:wght@600;700;800&display=swap');
 :root{
-  --ttc:#c8102e; --lake:#1a6b7c; --ravine:#1e3d28; --concrete:#8a8e8a;
-  --bg:#0c1820; --panel:#122028; --panel2:#1a2e38;
-  --ink:#e6ebe8; --dim:#7a929c; --good:#5cbf6a; --bad:#e05a45; --warn:#e0b04a;
-  --res:#c9a227; --com:#2a9d8f; --ind:#a05a2c; --off:#5b7cfa;
-  --limestone:#a8a69e;
+  --ttc:#d0122d;
+  --ttc-dim:rgba(208,18,45,.14);
+  --lake:#2a8fa3;
+  --lake-dim:rgba(42,143,163,.18);
+  --bg:#081018;
+  --bg2:#0d1a22;
+  --panel:rgba(12,24,32,.78);
+  --panel-solid:#101e28;
+  --panel2:#152430;
+  --line:rgba(230,236,240,.08);
+  --line2:rgba(230,236,240,.14);
+  --ink:#eef3f5;
+  --ink2:#b7c6cd;
+  --dim:#7f939c;
+  --good:#3ecf7a;
+  --bad:#ff6b57;
+  --warn:#efc15a;
+  --res:#d4a92a;
+  --com:#2eb5a6;
+  --ind:#c06a35;
+  --off:#6b8cff;
+  --limestone:#c4c0b6;
+  --radius:12px;
+  --radius-sm:8px;
+  --font:"Figtree",sans-serif;
+  --display:"Syne",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+  --shadow:0 18px 50px rgba(0,0,0,.45);
+  --ease:cubic-bezier(.22,1,.36,1);
 }
-*{box-sizing:border-box} html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:'Source Sans 3',system-ui,sans-serif;overflow:hidden}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
 .app{display:flex;flex-direction:column;height:100vh}
-header.board{background:linear-gradient(180deg,#1e3340 0%,#122028 70%);border-bottom:3px solid var(--ttc);padding:7px 14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;z-index:6;box-shadow:0 2px 12px rgba(0,0,0,.35)}
-.brand{font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:13px;color:var(--limestone)}.brand span{color:var(--ttc);letter-spacing:.14em}
-.stat{display:flex;flex-direction:column;padding:1px 9px;border-left:1px solid rgba(168,166,158,.18);min-width:62px}
-.stat label{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
-.stat .val{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600}
-.val.bad{color:var(--bad)}.val.good{color:var(--good)}.val.warn{color:var(--warn)}.spacer{flex:1}
-button.ctl{background:var(--panel2);border:1px solid rgba(168,166,158,.2);color:var(--ink);padding:5px 9px;border-radius:3px;cursor:pointer;font-weight:700;font-size:11px;font-family:inherit;transition:background .12s}
-button.ctl:hover{border-color:rgba(200,16,46,.45)}
-button.ctl.active{background:var(--ttc);border-color:var(--ttc);color:#fff}
-button.ctl.ghost{background:transparent;color:var(--dim)}
+
+/* ---- Top board ---- */
+header.board{
+  background:linear-gradient(180deg,rgba(16,30,40,.96),rgba(10,20,28,.92));
+  border-bottom:1px solid var(--line2);
+  padding:8px 16px 8px 18px;
+  display:flex;align-items:center;gap:4px;flex-wrap:wrap;z-index:6;
+  backdrop-filter:blur(16px); position:relative;
+}
+header.board::after{
+  content:""; position:absolute; left:0; right:0; bottom:0; height:2px;
+  background:linear-gradient(90deg,var(--ttc) 0%, var(--ttc) 28%, transparent 70%);
+}
+.brand{
+  font-family:var(--display); font-weight:800; letter-spacing:.04em;
+  text-transform:uppercase; font-size:14px; color:var(--ink); margin-right:10px;
+}
+.brand span{color:var(--ttc)}
+.stat{display:flex;flex-direction:column;padding:2px 11px;border-left:1px solid var(--line);min-width:64px}
+.stat label{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.stat .val{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:-.01em;margin-top:1px}
+.val.bad{color:var(--bad)}.val.good{color:var(--good)}.val.warn{color:var(--warn)}
+.spacer{flex:1}
+.ctl-group{display:flex;gap:4px;align-items:center;margin-left:6px}
+button.ctl{
+  background:rgba(255,255,255,.04); border:1px solid var(--line2); color:var(--ink);
+  padding:6px 11px; border-radius:999px; cursor:pointer; font-weight:700; font-size:11px;
+  transition:background .18s var(--ease), border-color .18s, transform .18s var(--ease);
+}
+button.ctl:hover{background:rgba(255,255,255,.08); border-color:rgba(208,18,45,.45); transform:translateY(-1px)}
+button.ctl.active{background:var(--ttc); border-color:var(--ttc); color:#fff; box-shadow:0 6px 18px rgba(208,18,45,.28)}
+button.ctl.ghost{background:transparent; color:var(--ink2); border-color:transparent}
+button.ctl.ghost:hover{border-color:var(--line2); color:var(--ink)}
+
 .main{flex:1;display:flex;min-height:0}
-.canvas-wrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 70%,#143040 0%,#0a1520 55%,#071018 100%);cursor:crosshair}
+.canvas-wrap{
+  flex:1;position:relative;overflow:hidden;cursor:crosshair;
+  background:radial-gradient(ellipse at 50% 80%,#123040 0%,#0a1520 48%,#050c12 100%);
+}
 #game{display:block;width:100%;height:100%}
 .label-layer{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
-.map-label{position:absolute;transform:translate(-50%,-100%);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.55);text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.5);white-space:nowrap;pointer-events:none}
-.hud-tip{position:absolute;left:10px;bottom:10px;z-index:3;background:rgba(18,32,40,.94);border:1px solid rgba(26,107,124,.35);border-left:3px solid var(--ttc);padding:9px 12px;border-radius:4px;font-size:11px;color:var(--dim);max-width:380px;pointer-events:none;backdrop-filter:blur(4px)}
-.hud-tip strong{color:var(--ink)}.hud-tip.warn{border-color:var(--warn);border-left-color:var(--warn);color:#f0d090}
-aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);border-left:1px solid rgba(168,166,158,.12);padding:12px;display:flex;flex-direction:column;gap:11px;overflow-y:auto;z-index:6}
-.panel h3{font-size:9px;text-transform:uppercase;letter-spacing:.16em;color:var(--lake);margin:0 0 6px;border-bottom:1px solid rgba(26,107,124,.25);padding-bottom:4px}
-.rci-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.roundel{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:9px;color:#111;flex:none}
-.rci-bar{flex:1;height:9px;background:rgba(255,255,255,.07);border-radius:5px;position:relative;overflow:hidden}
-.rci-fill{position:absolute;top:0;bottom:0;left:50%}.rci-mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.28)}
-.taxrow{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:4px}.taxrow input{flex:1}.tval{width:32px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px}
-#happiness-bar-outer{height:9px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden;margin-top:3px}
-#happiness-bar{height:100%;background:linear-gradient(90deg,#3a8a50,var(--good));width:50%}
-.metrics{font-size:11px;color:var(--dim);line-height:1.45}.metrics b{color:var(--ink)}
-.inspect{background:rgba(26,46,56,.85);border:1px solid rgba(168,166,158,.1);border-radius:4px;padding:8px 10px;font-size:11px;line-height:1.4;min-height:68px;color:var(--dim)}
-.inspect .title{color:var(--ink);font-weight:700;margin-bottom:2px}
-.log{font-size:10px;line-height:1.4;color:var(--dim);max-height:130px;overflow-y:auto;display:flex;flex-direction:column-reverse}
-.log div{border-bottom:1px dotted rgba(255,255,255,.06);padding:2px 0}.log .ev{color:#e8b86a}
-.bottom{background:var(--panel);border-top:1px solid rgba(168,166,158,.14);z-index:6}
-.cats{display:flex;gap:2px;padding:7px 10px 0;flex-wrap:wrap}
-.cat{background:transparent;border:1px solid rgba(168,166,158,.15);color:var(--dim);padding:6px 10px;border-radius:3px 3px 0 0;cursor:pointer;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-family:inherit}
-.cat:hover{color:var(--ink);border-color:rgba(200,16,46,.35)}
-.cat.active{background:var(--panel2);color:var(--ink);border-bottom-color:var(--panel2);box-shadow:inset 0 -2px 0 var(--ttc)}
-.toolbar{padding:7px 10px 9px;display:flex;gap:4px;flex-wrap:wrap;align-items:flex-start;max-height:120px;overflow-y:auto;background:var(--panel2)}
-.tool{display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:none;cursor:pointer;color:var(--dim);padding:4px;border-radius:4px;min-width:54px;font-family:inherit}
-.tool:hover{background:rgba(255,255,255,.05);color:var(--ink)}
-.tool.selected{background:rgba(200,16,46,.18);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ttc)}
-.tool .ico{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#111;box-shadow:0 1px 3px rgba(0,0,0,.25)}
-.tool .lbl{font-size:8px;text-transform:uppercase;letter-spacing:.02em;text-align:center;max-width:58px;line-height:1.1}
-.tool .cost{font-size:8px;font-family:'IBM Plex Mono',monospace;color:var(--dim)}
-.parks-panel{display:none;padding:6px 10px 9px;background:#0f222a;max-height:140px;overflow-y:auto;border-top:1px solid rgba(26,107,124,.2)}
+.map-label{
+  position:absolute;transform:translate(-50%,-100%);
+  font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.12em;
+  text-transform:uppercase; color:rgba(255,255,255,.5);
+  text-shadow:0 1px 4px rgba(0,0,0,.85); white-space:nowrap; pointer-events:none;
+}
+.hud-tip{
+  position:absolute; left:14px; bottom:14px; z-index:3;
+  background:rgba(10,20,28,.82); border:1px solid var(--line2);
+  border-left:3px solid var(--ttc); padding:11px 14px; border-radius:var(--radius-sm);
+  font-size:12px; color:var(--ink2); max-width:400px; pointer-events:none;
+  backdrop-filter:blur(12px); box-shadow:var(--shadow); line-height:1.45;
+}
+.hud-tip strong{color:var(--ink); font-weight:700}
+.hud-tip.warn{border-left-color:var(--warn); color:#f3d79a}
+
+aside.panel{
+  width:286px; background:linear-gradient(180deg,rgba(14,26,34,.97),rgba(10,18,24,.98));
+  border-left:1px solid var(--line); padding:14px 14px 16px;
+  display:flex; flex-direction:column; gap:14px; overflow-y:auto; z-index:6;
+}
+.panel h3{
+  font-family:var(--display); font-size:10px; text-transform:uppercase; letter-spacing:.16em;
+  color:var(--lake); margin:0 0 8px; font-weight:700;
+}
+.rci-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.roundel{
+  width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:10px;color:#0a1014;flex:none;
+}
+.rci-bar{flex:1;height:8px;background:rgba(255,255,255,.06);border-radius:99px;position:relative;overflow:hidden}
+.rci-fill{position:absolute;top:0;bottom:0;left:50%; border-radius:99px}
+.rci-mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.25)}
+.taxrow{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px;color:var(--ink2)}
+.taxrow input{flex:1;accent-color:var(--ttc)}
+.tval{width:34px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--ink)}
+#happiness-bar-outer{height:8px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;margin-top:4px}
+#happiness-bar{height:100%;background:linear-gradient(90deg,#2a8a58,var(--good));width:50%;border-radius:99px;transition:width .4s var(--ease)}
+.metrics{font-size:12px;color:var(--dim);line-height:1.5}.metrics b{color:var(--ink);font-weight:600}
+.hist-block{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.hist-row{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--dim)}
+.hist-row span.lbl{width:52px;flex:none;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.spark{display:inline-flex;align-items:flex-end;gap:1px;height:22px;flex:1}
+.spark i{display:block;width:3px;min-height:2px;border-radius:1px 1px 0 0;opacity:.85}
+.inspect{
+  background:rgba(255,255,255,.03); border:1px solid var(--line); border-radius:var(--radius-sm);
+  padding:10px 12px; font-size:12px; line-height:1.45; min-height:72px; color:var(--dim);
+}
+.inspect .title{color:var(--ink);font-weight:700;margin-bottom:4px;font-size:13px}
+.log{font-size:11px;line-height:1.45;color:var(--dim);max-height:130px;overflow-y:auto;display:flex;flex-direction:column-reverse}
+.log div{border-bottom:1px solid var(--line);padding:4px 0}.log .ev{color:var(--warn)}
+
+.bottom{
+  background:rgba(10,18,24,.96); border-top:1px solid var(--line2); z-index:6;
+  backdrop-filter:blur(14px);
+}
+.cats{display:flex;gap:4px;padding:10px 12px 0;flex-wrap:wrap}
+.cat{
+  background:transparent; border:1px solid transparent; color:var(--dim);
+  padding:7px 12px; border-radius:999px; cursor:pointer; font-size:11px; font-weight:700;
+  letter-spacing:.02em; transition:all .18s var(--ease);
+}
+.cat:hover{color:var(--ink); background:rgba(255,255,255,.04)}
+.cat.active{background:var(--ttc-dim); color:var(--ink); border-color:rgba(208,18,45,.35)}
+.toolbar{
+  padding:8px 12px 12px; display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start;
+  max-height:128px; overflow-y:auto;
+}
+.tool{
+  display:flex; flex-direction:column; align-items:center; gap:3px; background:rgba(255,255,255,.02);
+  border:1px solid transparent; cursor:pointer; color:var(--dim); padding:7px 6px; border-radius:var(--radius-sm);
+  min-width:58px; transition:all .18s var(--ease);
+}
+.tool:hover{background:rgba(255,255,255,.05); color:var(--ink); border-color:var(--line2)}
+.tool.selected{background:var(--ttc-dim); color:var(--ink); border-color:rgba(208,18,45,.45)}
+.tool .ico{
+  width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:800;color:#0a1014;
+}
+.tool .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.03em;text-align:center;max-width:60px;line-height:1.15;font-weight:600}
+.tool .cost{font-size:9px;font-family:var(--mono);color:var(--dim)}
+.parks-panel{display:none;padding:8px 12px 12px;background:rgba(0,0,0,.18);max-height:148px;overflow-y:auto;border-top:1px solid var(--line)}
 .parks-panel.show{display:block}
-.parks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:4px}
-.park-btn{background:rgba(30,61,40,.35);border:1px solid rgba(92,191,106,.2);color:var(--ink);padding:6px 8px;border-radius:3px;cursor:pointer;font-size:10px;text-align:left;font-family:inherit}
-.park-btn:hover{border-color:var(--good);background:rgba(30,61,40,.55)}.park-btn.selected{border-color:var(--ttc);background:rgba(200,16,46,.15)}
-.park-btn small{display:block;color:var(--dim);font-family:'IBM Plex Mono',monospace}
-.boot-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 30%,#1a3040 0%,#0c1820 55%,#070e14 100%);color:#e6ebe8;font-family:'Source Sans 3',system-ui,sans-serif;padding:20px;overflow:auto}
+.parks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:6px}
+.park-btn{
+  background:rgba(46,100,70,.18); border:1px solid rgba(62,207,122,.18); color:var(--ink);
+  padding:8px 10px; border-radius:var(--radius-sm); cursor:pointer; font-size:11px; text-align:left;
+  transition:border-color .15s, background .15s;
+}
+.park-btn:hover{border-color:var(--good); background:rgba(46,100,70,.28)}
+.park-btn.selected{border-color:var(--ttc); background:var(--ttc-dim)}
+.park-btn small{display:block;color:var(--dim);font-family:var(--mono);margin-top:2px}
+
+/* ---- Boot / Lobby ---- */
+.boot-overlay{
+  position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;
+  color:var(--ink); font-family:var(--font); padding:28px 22px; overflow:auto;
+  background:
+    radial-gradient(ellipse 90% 60% at 78% 8%, rgba(208,18,45,.22), transparent 52%),
+    radial-gradient(ellipse 75% 55% at 12% 88%, rgba(42,143,163,.28), transparent 48%),
+    linear-gradient(168deg, #0c1a26 0%, #09141c 42%, #050b10 100%);
+}
 .boot-overlay.hidden{display:none}
-.boot-card{max-width:420px;background:#122028;border:1px solid rgba(168,166,158,.2);border-left:3px solid #c8102e;padding:22px 24px;border-radius:6px;text-align:center}
-.boot-card h1{margin:0 0 8px;font-size:16px;letter-spacing:.08em;text-transform:uppercase}
-.boot-card p{margin:0;font-size:13px;color:#7a929c;line-height:1.5}
-.boot-card.error{border-left-color:#e05a45}
-.boot-card.error p{color:#e0b0a0}
-.lobby-shell{width:min(920px,100%);display:grid;grid-template-columns:1.1fr .9fr;gap:18px;align-items:stretch}
-@media (max-width:820px){.lobby-shell{grid-template-columns:1fr}}
-.lobby-hero{background:linear-gradient(160deg,rgba(200,16,46,.18),rgba(18,32,40,.95) 40%),#122028;border:1px solid rgba(168,166,158,.18);border-radius:10px;padding:28px 26px 42px;display:flex;flex-direction:column;justify-content:flex-end;min-height:280px;position:relative;overflow:hidden}
-.lobby-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 20%,rgba(26,107,124,.35),transparent 50%);pointer-events:none}
-.lobby-hero .eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#7a929c;margin-bottom:8px;position:relative}
-.lobby-hero h1{margin:0 0 10px;font-size:clamp(28px,4vw,40px);line-height:1.05;letter-spacing:.04em;text-transform:uppercase;position:relative}
-.lobby-hero h1 span{color:#c8102e}
-.lobby-hero p{margin:0;color:#9ab0b8;font-size:14px;line-height:1.5;max-width:36ch;position:relative}
-.lobby-panel{background:#122028;border:1px solid rgba(168,166,158,.18);border-radius:10px;padding:18px 18px 16px;display:flex;flex-direction:column;gap:14px}
-.lobby-panel h2{margin:0;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#1a6b7c;border-bottom:1px solid rgba(26,107,124,.25);padding-bottom:6px}
-.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.mode-card{text-align:left;background:rgba(26,46,56,.7);border:1px solid rgba(168,166,158,.14);border-radius:6px;padding:10px 11px;cursor:pointer;color:inherit;font-family:inherit;transition:border-color .12s,background .12s}
-.mode-card:hover{border-color:rgba(200,16,46,.4)}
-.mode-card.active{border-color:#c8102e;background:rgba(200,16,46,.14);box-shadow:inset 0 0 0 1px rgba(200,16,46,.35)}
-.mode-card strong{display:block;font-size:13px;margin-bottom:3px}
-.mode-card span{display:block;font-size:11px;color:#7a929c;line-height:1.35}
-.opt-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:#c5d0d4}
-.opt-row select,.opt-row input[type=range]{flex:1;max-width:160px;background:#1a2e38;border:1px solid rgba(168,166,158,.2);color:#e6ebe8;border-radius:4px;padding:5px 8px;font-family:inherit}
-.opt-row label{display:flex;align-items:center;gap:8px;cursor:pointer}
-.lobby-actions{display:flex;flex-direction:column;gap:8px;margin-top:4px}
-.lobby-btn{border:none;border-radius:5px;padding:11px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;letter-spacing:.04em;text-transform:uppercase}
-.lobby-btn.primary{background:#c8102e;color:#fff}
-.lobby-btn.primary:hover{filter:brightness(1.08)}
-.lobby-btn.secondary{background:transparent;color:#c5d0d4;border:1px solid rgba(168,166,158,.25)}
-.lobby-btn.secondary:hover{border-color:#c8102e;color:#fff}
-.lobby-btn:disabled{opacity:.4;cursor:not-allowed}
+.boot-overlay::before{
+  content:""; position:fixed; inset:0; pointer-events:none; opacity:.28;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+  background-size:180px; mix-blend-mode:overlay;
+}
+.boot-card{
+  max-width:440px; background:rgba(14,26,34,.92); border:1px solid var(--line2);
+  padding:28px 30px; border-radius:16px; text-align:center; backdrop-filter:blur(20px);
+  box-shadow:var(--shadow); animation:lobbyIn .55s var(--ease);
+}
+.boot-card h1{margin:0 0 10px; font-family:var(--display); font-size:18px; letter-spacing:.06em; text-transform:uppercase}
+.boot-card p{margin:0; font-size:14px; color:var(--ink2); line-height:1.55}
+.boot-card.error{border-color:rgba(255,107,87,.4)}
+.boot-card.error p{color:#f0b8b0}
+
+.lobby-shell{
+  width:min(1120px,100%); display:grid; grid-template-columns:1.2fr .8fr; gap:26px; align-items:stretch;
+  position:relative; z-index:1; animation:lobbyIn .75s var(--ease);
+}
+@keyframes lobbyIn{from{opacity:0; transform:translateY(20px)} to{opacity:1; transform:none}}
+@media (max-width:860px){.lobby-shell{grid-template-columns:1fr; gap:18px}}
+
+.lobby-hero{
+  position:relative; overflow:hidden; min-height:460px; border-radius:22px;
+  border:1px solid rgba(230,236,240,.12); display:flex; flex-direction:column; justify-content:flex-end;
+  padding:40px 38px 44px;
+  background:
+    linear-gradient(185deg, transparent 12%, rgba(5,12,18,.42) 48%, rgba(5,12,18,.94) 100%),
+    linear-gradient(118deg, rgba(208,18,45,.2) 0%, transparent 38%),
+    linear-gradient(205deg, #1a3a4e 0%, #0e2030 48%, #071018 100%);
+  box-shadow:var(--shadow);
+}
+.lobby-hero::before{
+  content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:linear-gradient(90deg, transparent 60%, rgba(208,18,45,.08) 100%);
+}
+.lobby-hero::after{
+  content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:radial-gradient(ellipse 55% 45% at 74% 22%, rgba(42,143,163,.34), transparent 58%);
+}
+.lobby-skyline{
+  position:absolute; left:-3%; right:-3%; bottom:0; height:62%; pointer-events:none; opacity:1;
+  animation:skyRise 1.15s var(--ease) both; z-index:0;
+}
+@keyframes skyRise{from{transform:translateY(22px); opacity:0} to{transform:none; opacity:1}}
+.lobby-hero .eyebrow{
+  position:relative; z-index:1; font-size:11px; letter-spacing:.26em; text-transform:uppercase;
+  color:rgba(183,198,205,.92); margin-bottom:14px; font-weight:600;
+}
+.lobby-hero .eyebrow::after{
+  content:""; display:inline-block; width:28px; height:2px; margin-left:12px; vertical-align:middle;
+  background:linear-gradient(90deg, var(--ttc), transparent); border-radius:1px;
+}
+.lobby-hero h1{
+  position:relative; z-index:1; margin:0 0 14px; font-family:var(--display);
+  font-size:clamp(44px,6vw,64px); line-height:.92; letter-spacing:-.03em; font-weight:800;
+  text-transform:uppercase; color:#f4f8fa;
+  text-shadow:0 2px 24px rgba(0,0,0,.35);
+}
+.lobby-hero h1 span{
+  color:var(--ttc); display:inline-block;
+  animation:brandPulse 2.8s var(--ease) 0.6s both;
+}
+@keyframes brandPulse{from{opacity:.55; transform:translateY(6px)} to{opacity:1; transform:none}}
+.lobby-hero p{
+  position:relative; z-index:1; margin:0; color:rgba(214,226,232,.88); font-size:15px; line-height:1.55;
+  max-width:36ch; font-weight:500;
+}
+
+.lobby-panel{
+  background:rgba(10,20,28,.82); border:1px solid rgba(230,236,240,.14); border-radius:22px;
+  padding:24px 24px 20px; display:flex; flex-direction:column; gap:18px;
+  backdrop-filter:blur(24px); box-shadow:var(--shadow);
+  animation:lobbyIn .85s var(--ease) .08s both;
+}
+.lobby-panel h2{
+  margin:0 0 -4px; font-family:var(--display); font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--lake); font-weight:700;
+}
+.mode-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.mode-card{
+  text-align:left; background:rgba(255,255,255,.028); border:1px solid var(--line);
+  border-radius:12px; padding:12px 13px; cursor:pointer; transition:all .2s var(--ease);
+}
+.mode-card:hover{border-color:rgba(208,18,45,.4); background:rgba(255,255,255,.05); transform:translateY(-1px)}
+.mode-card.active{
+  border-color:rgba(208,18,45,.55); background:var(--ttc-dim);
+  box-shadow:inset 0 0 0 1px rgba(208,18,45,.25);
+}
+.mode-card strong{display:block; font-size:13px; margin-bottom:4px; font-weight:700}
+.mode-card span{display:block; font-size:11px; color:var(--dim); line-height:1.4; font-weight:500}
+.opt-row{display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:var(--ink2); font-weight:500}
+.opt-row select{
+  flex:1; max-width:168px; background:rgba(255,255,255,.04); border:1px solid var(--line2);
+  color:var(--ink); border-radius:8px; padding:7px 10px; outline:none;
+}
+.opt-row select:focus{border-color:rgba(208,18,45,.45)}
+.opt-row label{display:flex; align-items:center; gap:8px; cursor:pointer}
+.opt-row input[type=checkbox]{accent-color:var(--ttc); width:15px; height:15px}
+.lobby-actions{display:flex; flex-direction:column; gap:8px; margin-top:4px}
+.lobby-btn{
+  border:none; border-radius:12px; padding:14px 16px; font-weight:700; font-size:13px;
+  cursor:pointer; letter-spacing:.04em; transition:transform .18s var(--ease), filter .18s, background .18s, border-color .18s;
+}
+.lobby-btn.primary{background:var(--ttc); color:#fff; box-shadow:0 12px 32px rgba(208,18,45,.36)}
+.lobby-btn.primary:hover{filter:brightness(1.07); transform:translateY(-1px)}
+.lobby-btn.secondary{background:transparent; color:var(--ink2); border:1px solid var(--line2)}
+.lobby-btn.secondary:hover{border-color:rgba(208,18,45,.45); color:#fff}
+.lobby-btn:disabled{opacity:.35; cursor:not-allowed; transform:none !important}
+.lobby-note{margin:0; font-size:12px; color:var(--dim); line-height:1.5; font-weight:500}
 .boot-card.hidden,.lobby-shell.hidden{display:none !important}
-.guide-overlay{position:absolute;inset:0;z-index:5;display:flex;align-items:flex-end;justify-content:flex-start;padding:14px;pointer-events:none;background:linear-gradient(180deg,transparent 55%,rgba(8,16,22,.55) 100%)}
+
+/* ---- In-game overlays ---- */
+.guide-overlay{
+  position:absolute; inset:0; z-index:5; display:flex; align-items:flex-end; justify-content:flex-start;
+  padding:18px; pointer-events:none;
+  background:linear-gradient(180deg,transparent 50%,rgba(5,12,18,.5) 100%);
+}
 .guide-overlay.hidden{display:none}
-.guide-card{pointer-events:auto;max-width:360px;background:rgba(18,32,40,.96);border:1px solid rgba(26,107,124,.4);border-left:3px solid #c8102e;padding:14px 16px;border-radius:6px;font-size:12px;color:#7a929c;line-height:1.45;backdrop-filter:blur(6px)}
-.guide-card strong{color:#e6ebe8}
-.guide-card ol{margin:8px 0 10px;padding-left:18px}
-.guide-card li{margin:3px 0}
-.guide-card button{background:#c8102e;border:none;color:#fff;font-weight:700;font-size:11px;padding:7px 12px;border-radius:3px;cursor:pointer;font-family:inherit}
-.guide-card li.done{color:#5cbf6a;text-decoration:line-through}
-.guide-card li.current{color:#e6ebe8;font-weight:700}
-.tool.guide-pulse .ico,.cat.guide-pulse{animation:guidePulse 1.1s ease-in-out infinite;box-shadow:0 0 0 2px #c8102e}
-@keyframes guidePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
-.cat.locked{opacity:.35;pointer-events:none}
-.toast-stack{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:8;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:min(420px,92%)}
-.toast{background:rgba(18,32,40,.96);border:1px solid rgba(92,191,106,.45);border-left:3px solid #5cbf6a;color:#e6ebe8;padding:10px 14px;border-radius:5px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.35);animation:toastIn .35s ease-out}
-.toast.landmark{border-color:rgba(200,16,46,.5);border-left-color:#c8102e}
-.toast.warn{border-color:rgba(224,176,74,.5);border-left-color:#e0b04a}
-.toast.bad{border-color:rgba(224,90,69,.5);border-left-color:#e05a45}
-@keyframes toastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
-.goals-bar{position:absolute;top:10px;left:10px;z-index:4;display:flex;flex-direction:column;gap:4px;pointer-events:none;max-width:220px}
-.goal-chip{background:rgba(18,32,40,.9);border:1px solid rgba(168,166,158,.2);border-radius:4px;padding:5px 8px;font-size:10px;color:#7a929c;backdrop-filter:blur(4px)}
-.goal-chip.done{border-color:rgba(92,191,106,.45);color:#5cbf6a}
-.goal-chip b{color:#e6ebe8}.goal-chip.done b{color:#5cbf6a}
-.alert-banner{position:absolute;top:0;left:0;right:0;z-index:7;display:none;align-items:center;justify-content:center;gap:12px;padding:8px 14px;background:rgba(80,20,24,.94);border-bottom:2px solid #c8102e;color:#f0d0d0;font-size:12px;font-weight:600;text-align:center}
-.alert-banner.show{display:flex;flex-wrap:wrap}
-.alert-banner button{background:#c8102e;border:none;color:#fff;font-weight:700;font-size:11px;padding:6px 10px;border-radius:3px;cursor:pointer;font-family:inherit}
-.mobile-cam{display:none;position:absolute;right:10px;bottom:10px;z-index:5;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:none}
-.mobile-cam .pad{pointer-events:auto;display:grid;grid-template-columns:repeat(3,40px);gap:4px}
-.mobile-cam .pad2{pointer-events:auto;display:flex;gap:4px}
-.mobile-cam button{width:40px;height:40px;border:1px solid rgba(168,166,158,.25);background:rgba(18,32,40,.88);color:#e6ebe8;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:none;-webkit-user-select:none;user-select:none}
-.mobile-cam button:active{background:rgba(200,16,46,.35)}
-.mobile-cam button.wide{width:84px}
-.lobby-skyline{position:absolute;left:0;right:0;bottom:0;height:42%;pointer-events:none;opacity:.9}
-.lobby-note{margin:0;font-size:11px;color:#7a929c;line-height:1.4}
+.guide-card{
+  pointer-events:auto; max-width:380px; background:rgba(10,20,28,.92); border:1px solid var(--line2);
+  border-left:3px solid var(--ttc); padding:16px 18px; border-radius:14px; font-size:13px;
+  color:var(--ink2); line-height:1.5; backdrop-filter:blur(14px); box-shadow:var(--shadow);
+  animation:lobbyIn .45s var(--ease);
+}
+.guide-card strong{color:var(--ink); font-family:var(--display); letter-spacing:.02em}
+.guide-card ol{margin:10px 0 12px; padding-left:18px}
+.guide-card li{margin:5px 0}
+.guide-card li.done{color:var(--good); text-decoration:line-through; opacity:.75}
+.guide-card li.current{color:var(--ink); font-weight:700}
+.guide-card button{
+  background:var(--ttc); border:none; color:#fff; font-weight:700; font-size:12px;
+  padding:9px 14px; border-radius:999px; cursor:pointer; transition:filter .15s;
+}
+.guide-card button:hover{filter:brightness(1.08)}
+.tool.guide-pulse .ico,.cat.guide-pulse{animation:guidePulse 1.15s ease-in-out infinite; box-shadow:0 0 0 2px var(--ttc)}
+@keyframes guidePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+.cat.locked{opacity:.32; pointer-events:none}
+
+.toast-stack{
+  position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:8;
+  display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; width:min(420px,92%);
+}
+.toast{
+  background:rgba(10,20,28,.94); border:1px solid rgba(62,207,122,.35); border-left:3px solid var(--good);
+  color:var(--ink); padding:12px 16px; border-radius:12px; font-size:13px; font-weight:600;
+  box-shadow:var(--shadow); animation:toastIn .4s var(--ease); backdrop-filter:blur(12px);
+}
+.toast.landmark{border-color:rgba(208,18,45,.4); border-left-color:var(--ttc)}
+.toast.warn{border-color:rgba(239,193,90,.4); border-left-color:var(--warn)}
+.toast.bad{border-color:rgba(255,107,87,.4); border-left-color:var(--bad)}
+@keyframes toastIn{from{opacity:0; transform:translateY(-10px) scale(.98)} to{opacity:1; transform:none}}
+
+.goals-bar{position:absolute; top:12px; left:12px; z-index:4; display:flex; flex-direction:column; gap:5px; pointer-events:none; max-width:230px}
+.goal-chip{
+  background:rgba(10,20,28,.82); border:1px solid var(--line2); border-radius:999px;
+  padding:6px 11px; font-size:11px; color:var(--dim); backdrop-filter:blur(10px); font-weight:600;
+}
+.goal-chip.done{border-color:rgba(62,207,122,.4); color:var(--good)}
+.goal-chip b{color:var(--ink); margin-right:4px}.goal-chip.done b{color:var(--good)}
+
+.alert-banner{
+  position:absolute; top:0; left:0; right:0; z-index:7; display:none; align-items:center; justify-content:center;
+  gap:14px; padding:10px 16px; background:rgba(70,14,20,.94); border-bottom:1px solid rgba(208,18,45,.55);
+  color:#f5d4d4; font-size:13px; font-weight:600; text-align:center; backdrop-filter:blur(10px);
+}
+.alert-banner.show{display:flex; flex-wrap:wrap}
+.alert-banner button{
+  background:var(--ttc); border:none; color:#fff; font-weight:700; font-size:11px;
+  padding:7px 12px; border-radius:999px; cursor:pointer;
+}
+
+.mobile-cam{display:none; position:absolute; right:12px; bottom:12px; z-index:5; flex-direction:column; gap:6px; align-items:flex-end; pointer-events:none}
+.mobile-cam .pad{pointer-events:auto; display:grid; grid-template-columns:repeat(3,42px); gap:5px}
+.mobile-cam .pad2{pointer-events:auto; display:flex; gap:5px}
+.mobile-cam button{
+  width:42px; height:42px; border:1px solid var(--line2); background:rgba(10,20,28,.88); color:var(--ink);
+  border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; touch-action:none;
+  -webkit-user-select:none; user-select:none; backdrop-filter:blur(10px);
+}
+.mobile-cam button:active{background:var(--ttc-dim); border-color:rgba(208,18,45,.4)}
+
 @media (max-width:900px),(pointer:coarse){
   .mobile-cam{display:flex}
-  aside.panel{width:210px;padding:8px;gap:8px}
-  .hud-tip{max-width:min(320px,calc(100% - 120px));font-size:10px}
+  aside.panel{width:220px; padding:10px; gap:10px}
+  .hud-tip{max-width:min(320px,calc(100% - 130px)); font-size:11px}
 }
 @media (max-width:640px){
   aside.panel{display:none}
-  .stat{min-width:48px;padding:1px 5px}.stat .val{font-size:11px}
-  .toolbar{max-height:90px}
+  .stat{min-width:46px; padding:1px 6px}.stat .val{font-size:11px}
+  .brand{font-size:12px; margin-right:4px}
+  .toolbar{max-height:92px}
   .goals-bar{max-width:160px}
+  .lobby-hero{min-height:280px; padding:24px}
 }
-::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#2a4a55;border-radius:4px}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:99px}
 </style>
 </head>
 <body>
@@ -150,44 +389,63 @@ aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);borde
   <div class="boot-card" id="boot-card"><h1>Metro Builder · Toronto</h1><p id="boot-msg">Loading Three.js…</p></div>
   <div class="lobby-shell hidden" id="lobby">
     <div class="lobby-hero">
-      <svg class="lobby-skyline" viewBox="0 0 640 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <svg class="lobby-skyline" viewBox="0 0 640 180" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
         <defs>
           <linearGradient id="skyLake" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#1a6b7c" stop-opacity=".0"/>
-            <stop offset="100%" stop-color="#1a6b7c" stop-opacity=".55"/>
+            <stop offset="0%" stop-color="#2a8fa3" stop-opacity="0"/>
+            <stop offset="55%" stop-color="#2a8fa3" stop-opacity=".28"/>
+            <stop offset="100%" stop-color="#1a6a7a" stop-opacity=".62"/>
+          </linearGradient>
+          <linearGradient id="bldFar" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1a3040"/>
+            <stop offset="100%" stop-color="#0a1218"/>
+          </linearGradient>
+          <linearGradient id="bldNear" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#203848"/>
+            <stop offset="100%" stop-color="#0a141c"/>
           </linearGradient>
         </defs>
-        <rect x="0" y="118" width="640" height="42" fill="url(#skyLake)"/>
-        <g fill="#0a1520" opacity=".95">
-          <rect x="40" y="88" width="28" height="50"/><rect x="72" y="70" width="22" height="68"/><rect x="98" y="92" width="34" height="46"/>
-          <rect x="150" y="60" width="26" height="78"/><rect x="180" y="78" width="40" height="60"/><rect x="226" y="52" width="30" height="86"/>
-          <rect x="280" y="68" width="36" height="70"/><rect x="320" y="44" width="28" height="94"/><rect x="352" y="58" width="22" height="80"/>
-          <rect x="420" y="72" width="48" height="66"/><rect x="474" y="50" width="32" height="88"/><rect x="512" y="82" width="40" height="56"/>
-          <rect x="560" y="64" width="26" height="74"/><rect x="592" y="90" width="30" height="48"/>
+        <rect x="0" y="128" width="640" height="52" fill="url(#skyLake)"/>
+        <g fill="url(#bldFar)" opacity=".85">
+          <rect x="24" y="102" width="22" height="46"/><rect x="52" y="88" width="18" height="60"/>
+          <rect x="118" y="96" width="28" height="52"/><rect x="200" y="84" width="20" height="64"/>
+          <rect x="448" y="90" width="36" height="58"/><rect x="540" y="98" width="26" height="50"/>
         </g>
-        <!-- CN Tower silhouette -->
-        <g fill="#c8102e">
-          <rect x="392" y="20" width="5" height="98"/>
-          <rect x="386" y="48" width="17" height="8" rx="1"/>
-          <rect x="393" y="8" width="3" height="14"/>
+        <g fill="url(#bldNear)">
+          <rect x="40" y="92" width="28" height="56"/><rect x="74" y="68" width="22" height="80"/>
+          <rect x="100" y="100" width="34" height="48"/><rect x="152" y="58" width="26" height="90"/>
+          <rect x="184" y="82" width="40" height="66"/><rect x="232" y="48" width="30" height="100"/>
+          <rect x="270" y="72" width="36" height="76"/><rect x="314" y="38" width="28" height="110"/>
+          <rect x="348" y="58" width="22" height="90"/><rect x="424" y="76" width="46" height="72"/>
+          <rect x="480" y="50" width="32" height="98"/><rect x="520" y="88" width="40" height="60"/>
+          <rect x="568" y="66" width="26" height="82"/><rect x="600" y="96" width="30" height="52"/>
         </g>
-        <g fill="#122028" opacity=".7">
-          <rect x="300" y="100" width="14" height="38"/><rect x="400" y="108" width="18" height="30"/>
+        <g fill="#d8e4ea" opacity=".35">
+          <rect x="80" y="78" width="2" height="2"/><rect x="86" y="90" width="2" height="2"/>
+          <rect x="240" y="58" width="2" height="2"/><rect x="248" y="72" width="2" height="2"/>
+          <rect x="320" y="50" width="2" height="2"/><rect x="328" y="66" width="2" height="2"/>
+          <rect x="490" y="62" width="2" height="2"/><rect x="498" y="78" width="2" height="2"/>
+        </g>
+        <g fill="#d0122d">
+          <rect x="390" y="14" width="5" height="134"/>
+          <rect x="382" y="48" width="21" height="10" rx="1.5"/>
+          <rect x="391" y="4" width="3" height="14"/>
+          <circle cx="392.5" cy="46" r="2.2" fill="#ff6a7a"/>
         </g>
       </svg>
-      <div class="eyebrow">GTA City Simulator</div>
+      <div class="eyebrow">Greater Toronto · City Builder</div>
       <h1>Metro Builder<br><span>Toronto</span></h1>
-      <p>Build from the 401 to the harbour. Pick a mode, tune your start, then found the city.</p>
+      <p>Found a city from the 401 to the harbour. Grow neighbourhoods, power the grid, and raise the skyline.</p>
     </div>
     <div class="lobby-panel">
-      <h2>Game Mode</h2>
+      <h2>Mode</h2>
       <div class="mode-grid" id="mode-grid">
-        <button type="button" class="mode-card active" data-mode="classic"><strong>Classic</strong><span>Highway 401 ready. $55k treasury. Standard growth.</span></button>
-        <button type="button" class="mode-card" data-mode="sandbox"><strong>Sandbox</strong><span>$500k treasury. Relaxed demand. Build anything.</span></button>
-        <button type="button" class="mode-card" data-mode="challenge"><strong>Challenge</strong><span>$25k start. Tighter budget &amp; slower growth.</span></button>
-        <button type="button" class="mode-card" data-mode="empty"><strong>Empty Shore</strong><span>No 401. Blank land — you lay every road.</span></button>
+        <button type="button" class="mode-card active" data-mode="classic"><strong>Classic</strong><span>401 ready · $55k · standard growth</span></button>
+        <button type="button" class="mode-card" data-mode="sandbox"><strong>Sandbox</strong><span>$500k · relaxed demand</span></button>
+        <button type="button" class="mode-card" data-mode="challenge"><strong>Challenge</strong><span>$25k · tighter budget</span></button>
+        <button type="button" class="mode-card" data-mode="empty"><strong>Empty Shore</strong><span>No 401 · blank land</span></button>
       </div>
-      <h2>Options</h2>
+      <h2>Setup</h2>
       <div class="opt-row"><span>Difficulty</span>
         <select id="opt-diff">
           <option value="easy">Easy</option>
@@ -195,7 +453,7 @@ aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);borde
           <option value="hard">Hard</option>
         </select>
       </div>
-      <div class="opt-row"><span>Starting season</span>
+      <div class="opt-row"><span>Season</span>
         <select id="opt-season">
           <option value="0" selected>Spring</option>
           <option value="1">Summer</option>
@@ -203,39 +461,44 @@ aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);borde
           <option value="3">Winter</option>
         </select>
       </div>
-      <div class="opt-row"><span>Disasters / strikes</span>
-        <label><input type="checkbox" id="opt-events" checked> Enabled</label>
+      <div class="opt-row"><span>Disasters</span>
+        <label><input type="checkbox" id="opt-events" checked> On</label>
       </div>
-      <div class="opt-row"><span>Tutorial tips</span>
-        <label><input type="checkbox" id="opt-guide" checked> Show on start</label>
+      <div class="opt-row"><span>Tutorial</span>
+        <label><input type="checkbox" id="opt-guide" checked> On</label>
       </div>
       <div class="lobby-actions">
         <button type="button" class="lobby-btn primary" id="lobby-start">Start New City</button>
         <button type="button" class="lobby-btn secondary" id="lobby-continue" disabled>Continue Save</button>
       </div>
-      <p class="lobby-note" id="lobby-note">HTTPS host recommended (Netlify). LMB paint · RMB orbit · WASD pan.</p>
+      <p class="lobby-note" id="lobby-note">Autosave keeps your city. Toggle Disasters for fire, flood &amp; blizzard. Phone camera pad in-game.</p>
     </div>
   </div>
 </div>
 <div class="app" id="app-root" style="visibility:hidden">
 <header class="board">
-  <div class="brand">METRO BUILDER · <span>TORONTO</span></div>
+  <div class="brand">Metro Builder · <span>Toronto</span></div>
   <div class="stat"><label>Treasury</label><div class="val" id="stat-money">$55,000</div></div>
   <div class="stat"><label>Population</label><div class="val" id="stat-pop">0</div></div>
   <div class="stat"><label>Jobs</label><div class="val" id="stat-jobs">0</div></div>
   <div class="stat"><label>Unemp.</label><div class="val" id="stat-unemp">0%</div></div>
-  <div class="stat"><label>Year</label><div class="val" id="stat-date">Y1 Spring</div></div>
+  <div class="stat"><label>Date</label><div class="val" id="stat-date">Y1 Spring</div></div>
   <div class="stat"><label>Power</label><div class="val" id="stat-power">OK</div></div>
   <div class="stat"><label>Water</label><div class="val" id="stat-water">OK</div></div>
   <div class="stat"><label>Waste</label><div class="val" id="stat-waste">OK</div></div>
   <div class="spacer"></div>
-  <button class="ctl" id="btn-pause">II</button>
-  <button class="ctl active" id="btn-normal">▶</button>
-  <button class="ctl" id="btn-fast">▶▶</button>
-  <button class="ctl ghost" id="btn-share">Share</button>
-  <button class="ctl ghost" id="btn-save">Save</button>
-  <button class="ctl ghost" id="btn-load">Load</button>
-  <button class="ctl ghost" id="btn-reset">Lobby</button>
+  <div class="ctl-group">
+    <button class="ctl" id="btn-pause">II</button>
+    <button class="ctl active" id="btn-normal">▶</button>
+    <button class="ctl" id="btn-fast">▶▶</button>
+  </div>
+  <div class="ctl-group">
+    <button class="ctl ghost" id="btn-mute" title="Mute ambience">♪</button>
+    <button class="ctl ghost" id="btn-share">Share</button>
+    <button class="ctl ghost" id="btn-save">Save</button>
+    <button class="ctl ghost" id="btn-load">Load</button>
+    <button class="ctl ghost" id="btn-reset">Lobby</button>
+  </div>
 </header>
 <div class="main">
   <div class="canvas-wrap" id="wrap">
@@ -244,7 +507,7 @@ aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);borde
     <div class="alert-banner" id="alert-banner"><span id="alert-text"></span><button type="button" id="alert-dismiss">Continue</button></div>
     <div class="goals-bar" id="goals-bar"></div>
     <div class="toast-stack" id="toast-stack"></div>
-    <div class="hud-tip" id="tip"><strong>Build from the 401.</strong> Roads south toward the harbour → zone R → Power → Water. LMB paint · RMB orbit · MMB/Shift+LMB/Space+LMB pan · wheel zoom · WASD pan.</div>
+    <div class="hud-tip" id="tip"><strong>Build from the 401.</strong> Roads → zone R → Power → Water. <b>LMB</b> build · <b>MMB</b> rotate/tilt · <b>RMB drag</b> pan · <b>edge scroll</b>/<b>WASD</b> pan · wheel zoom · <b>Esc</b> cancel · <b>Space</b> pause · <b>1–3</b> speed.</div>
     <div class="mobile-cam" id="mobile-cam" aria-label="Camera controls">
       <div class="pad2">
         <button type="button" data-cam="orbitL" title="Orbit left">↺</button>
@@ -268,8 +531,8 @@ aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);borde
           <li data-step="2">Place a <strong>Wind Turbine</strong> on the road network</li>
           <li data-step="3">Place a <strong>Water Tower</strong>, then hit <strong>▶▶</strong></li>
         </ol>
-        <div style="margin-bottom:8px;font-size:11px">Phone: use the on-screen pad · Desktop: LMB paint · RMB orbit · WASD pan</div>
-        <button type="button" id="guide-dismiss">Got it — build</button>
+        <div style="margin-bottom:10px;font-size:12px;opacity:.85">LMB build · MMB rotate/tilt · RMB drag pan · edge scroll / WASD pan (Shift faster) · Q/E rotate · Z/X zoom · Home/End tilt · Esc cancel · Space pause · 1/2/3 speed · B bulldoze · 4–9 zones</div>
+        <button type="button" id="guide-dismiss">Start building</button>
       </div>
     </div>
   </div>
@@ -287,8 +550,14 @@ aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);borde
       <div class="taxrow"><span style="color:var(--com)">C</span><input type="range" id="tax-c" min="0" max="25" value="10"><span class="tval" id="tax-c-v">10%</span></div>
       <div class="taxrow"><span style="color:var(--ind)">I</span><input type="range" id="tax-i" min="0" max="25" value="8"><span class="tval" id="tax-i-v">8%</span></div>
     </div>
+    <div>
+      <h3>Funding</h3>
+      <div class="taxrow"><span>Roads</span><input type="range" id="fund-roads" min="50" max="120" value="100"><span class="tval" id="fund-roads-v">100%</span></div>
+      <div class="taxrow"><span>Police</span><input type="range" id="fund-police" min="50" max="120" value="100"><span class="tval" id="fund-police-v">100%</span></div>
+      <div class="taxrow"><span>Fire</span><input type="range" id="fund-fire" min="50" max="120" value="100"><span class="tval" id="fund-fire-v">100%</span></div>
+    </div>
     <div><h3>Happiness</h3><div id="happiness-bar-outer"><div id="happiness-bar"></div></div><div class="metrics" id="hap-d" style="margin-top:3px"></div></div>
-    <div><h3>Economy</h3><div class="metrics" id="econ"></div></div>
+    <div><h3>Simulation</h3><div class="metrics" id="econ"></div><div class="hist-block" id="hist-charts"></div></div>
     <div><h3>Inspector</h3><div class="inspect" id="inspect">Hover a tile.</div></div>
     <div style="flex:1;min-height:0;display:flex;flex-direction:column"><h3>Log</h3><div class="log" id="log"></div></div>
   </aside>
@@ -450,10 +719,6 @@ if(appRoot) appRoot.style.visibility='visible';
 
 const settings=launchSettings||gameSettings||{};
 gameSettings=settings;
-tutorialStep=0;
-tutorialActive=!!gameSettings.guide && !gameSettings.continueSave;
-milestones={firstPop:false,pop100:false,highpark:false,cntower:false};
-bankruptLatched=false;
 
 const COLS=80, ROWS=54, CELL=1;
 const SEASONS=['Spring','Summer','Fall','Winter'];
@@ -597,21 +862,36 @@ let population=0, jobs=0, unemployment=0, happiness=62;
 let powerCap=0, waterCap=0, wasteCap=0, powerDemand=0, waterDemand=0, wasteDemand=0;
 let demand={r:30,c:15,i:18,o:10};
 let lastBudget={revenue:0,upkeep:0,net:0};
-let avgTraffic=0, avgPollution=0, strikeUntil=-1;
+let avgTraffic=0, avgPollution=0, avgCrime=0, strikeUntil=-1, blizzardUntil=-1;
+let externalMarket=22;
+let tripStats={ok:0,fail:0,rate:1,samples:0};
+let tripStamp=1;
+let transitRiders=0;
+let fundRoads=1, fundPolice=1, fundFire=1;
+let cityCenter={x:COLS*0.48, y:ROWS*0.72};
 let hoverTile=null, painting=false;
 let worldDirty=true, structuresDirty=true, utilDirty=true;
 let labelEls=[];
 let _labelCamKey='';
 const eduInf=new Float32Array(COLS*ROWS);
 const parkInf=new Float32Array(COLS*ROWS);
+const fireInf=new Float32Array(COLS*ROWS);
+const policeInf=new Float32Array(COLS*ROWS);
+const healthInf=new Float32Array(COLS*ROWS);
 let infDirty=true;
 let tutorialStep=0;
-let tutorialActive=true;
-let milestones={firstPop:false,pop100:false,highpark:false,cntower:false};
+let tutorialActive=!!gameSettings.guide && !gameSettings.continueSave;
+let milestones={firstPop:false,pop100:false,pop1k:false,pop10k:false,highpark:false,cntower:false,landmark:false,metroToronto:false,_allDoneShown:false};
 let bankruptLatched=false;
 let alertKind=null;
 let autosaveTimer=null;
 let _audioCtx=null;
+let audioMuted=false;
+let ambientCtl=null;
+const HIST_LEN=32;
+const hist={pop:[],jobs:[],money:[],traffic:[],happiness:[]};
+let burningTiles=0, floodedTiles=0;
+const TRANSIT_TYPES=new Set(['transit','transitbridge','metro','busdepot','ferry','harbor','trainpass','traincargo','monorail']);
 const TUTORIAL_SEQ=[
   {cat:'roads', tool:'road', tip:'Paint a <strong>Street</strong> south from the 401.'},
   {cat:'zones', tool:'rzone', tip:'Zone <strong>R Low</strong> beside that road.'},
@@ -621,12 +901,17 @@ const TUTORIAL_SEQ=[
 const EARLY_CATS=new Set(['roads','zones','power','water','meta','parks']);
 const GOAL_DEFS=[
   {id:'pop100', label:'Reach 100 population'},
+  {id:'pop1k', label:'Reach 1,000 population'},
+  {id:'pop10k', label:'Reach 10,000 population'},
   {id:'highpark', label:'Plant High Park'},
-  {id:'cntower', label:'Plop the CN Tower'}
+  {id:'cntower', label:'Plop the CN Tower'},
+  {id:'landmark', label:'Build an Airport or Stadium'},
+  {id:'metroToronto', label:'Metro Toronto: CN Tower + High Park + 5k pop'}
 ];
 
 function playTone(freq, dur, type, gain){
   try{
+    if(audioMuted) return;
     if(!_audioCtx) _audioCtx=new (window.AudioContext||window.webkitAudioContext)();
     const ctx=_audioCtx;
     if(ctx.state==='suspended') ctx.resume();
@@ -644,6 +929,75 @@ function playCelebrate(){ playTone(523,0.12,'triangle',0.07); setTimeout(()=>pla
 function playLandmark(){ playTone(392,0.15,'sawtooth',0.04); setTimeout(()=>playTone(523,0.2,'triangle',0.06),120); setTimeout(()=>playTone(659,0.28,'sine',0.05),260); }
 function playWarn(){ playTone(220,0.18,'square',0.04); setTimeout(()=>playTone(180,0.22,'square',0.035),160); }
 
+function ensureAmbient(){
+  if(ambientCtl||audioMuted) return;
+  try{
+    if(!_audioCtx) _audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const ctx=_audioCtx;
+    if(ctx.state==='suspended') ctx.resume();
+    const master=ctx.createGain();
+    master.gain.value=0.022;
+    master.connect(ctx.destination);
+    const drone=ctx.createOscillator();
+    drone.type='sine'; drone.frequency.value=48;
+    const dg=ctx.createGain(); dg.gain.value=0.55;
+    drone.connect(dg); dg.connect(master); drone.start();
+    const drone2=ctx.createOscillator();
+    drone2.type='triangle'; drone2.frequency.value=72.5;
+    const dg2=ctx.createGain(); dg2.gain.value=0.18;
+    drone2.connect(dg2); dg2.connect(master); drone2.start();
+    const blipTimer=setInterval(()=>{
+      if(audioMuted||!ambientCtl) return;
+      try{
+        const o=ctx.createOscillator(); const g=ctx.createGain();
+        o.type='sine'; o.frequency.value=180+Math.random()*420;
+        g.gain.value=0.012;
+        o.connect(g); g.connect(master);
+        const t=ctx.currentTime;
+        g.gain.setValueAtTime(0.012,t);
+        g.gain.exponentialRampToValueAtTime(0.0008,t+0.35+Math.random()*0.4);
+        o.start(t); o.stop(t+0.5);
+      }catch(_){}
+    }, 4200+Math.random()*2800);
+    ambientCtl={master,drone,drone2,blipTimer};
+  }catch(_){}
+}
+function setAudioMuted(m){
+  audioMuted=!!m;
+  const btn=document.getElementById('btn-mute');
+  if(btn){ btn.textContent=audioMuted?'🔇':'♪'; btn.classList.toggle('active', audioMuted); btn.title=audioMuted?'Unmute':'Mute ambience'; }
+  if(ambientCtl){
+    try{ ambientCtl.master.gain.value=audioMuted?0:0.022; }catch(_){}
+  } else if(!audioMuted) ensureAmbient();
+}
+
+function pushHist(arr,v){
+  arr.push(v);
+  while(arr.length>HIST_LEN) arr.shift();
+}
+function sparkHtml(arr,color){
+  if(!arr.length) return '<span class="spark"></span>';
+  let min=arr[0], max=arr[0];
+  for(let i=1;i<arr.length;i++){ if(arr[i]<min) min=arr[i]; if(arr[i]>max) max=arr[i]; }
+  const range=Math.max(1e-6, max-min);
+  let html='<span class="spark">';
+  const start=Math.max(0,arr.length-28);
+  for(let i=start;i<arr.length;i++){
+    const h=Math.round(3+((arr[i]-min)/range)*17);
+    html+=`<i style="height:${h}px;background:${color}"></i>`;
+  }
+  return html+'</span>';
+}
+function renderHistory(){
+  const el=document.getElementById('hist-charts'); if(!el) return;
+  el.innerHTML=
+    `<div class="hist-row"><span class="lbl">Pop</span>${sparkHtml(hist.pop,'#d4a92a')}</div>`+
+    `<div class="hist-row"><span class="lbl">Jobs</span>${sparkHtml(hist.jobs,'#2eb5a6')}</div>`+
+    `<div class="hist-row"><span class="lbl">$</span>${sparkHtml(hist.money,'#3ecf7a')}</div>`+
+    `<div class="hist-row"><span class="lbl">Traffic</span>${sparkHtml(hist.traffic,'#efc15a')}</div>`+
+    `<div class="hist-row"><span class="lbl">Happy</span>${sparkHtml(hist.happiness,'#6b8cff')}</div>`;
+}
+
 function showToast(msg, kind, ms){
   const stack=document.getElementById('toast-stack'); if(!stack) return;
   const el=document.createElement('div');
@@ -655,10 +1009,19 @@ function showToast(msg, kind, ms){
 
 function renderGoals(){
   const bar=document.getElementById('goals-bar'); if(!bar) return;
-  bar.innerHTML=GOAL_DEFS.map(g=>{
-    const done=!!milestones[g.id==='pop100'?'pop100':g.id];
-    return `<div class="goal-chip${done?' done':''}"><b>${done?'✓':'○'}</b> ${g.label}</div>`;
-  }).join('');
+  const open=GOAL_DEFS.filter(g=>!milestones[g.id]);
+  if(!open.length){
+    if(!milestones._allDoneShown){
+      milestones._allDoneShown=true;
+      bar.innerHTML=`<div class="goal-chip done"><b>✓</b> All goals complete</div>`;
+      setTimeout(()=>{ if(bar) bar.innerHTML=''; }, 2800);
+    } else {
+      bar.innerHTML='';
+    }
+    return;
+  }
+  milestones._allDoneShown=false;
+  bar.innerHTML=open.map(g=>`<div class="goal-chip"><b>○</b> ${g.label}</div>`).join('');
 }
 
 function catUnlocked(id){
@@ -728,6 +1091,18 @@ function checkMilestones(placedType){
     playCelebrate();
     log('Milestone: 100 population.', true);
   }
+  if(!milestones.pop1k && population>=1000){
+    milestones.pop1k=true;
+    showToast('Goal: <b>1,000 population</b> — neighbourhoods fill in!', 'landmark');
+    playCelebrate();
+    log('Milestone: 1,000 population.', true);
+  }
+  if(!milestones.pop10k && population>=10000){
+    milestones.pop10k=true;
+    showToast('Goal: <b>10,000 population</b> — a real city!', 'landmark', 4500);
+    playCelebrate();
+    log('Milestone: 10,000 population.', true);
+  }
   if(placedType==='park_highpark' && !milestones.highpark){
     milestones.highpark=true;
     showToast('Goal: <b>High Park</b> planted — the west end breathes.', 'landmark');
@@ -739,6 +1114,18 @@ function checkMilestones(placedType){
     showToast('Goal: <b>CN Tower</b> rises over the harbour!', 'landmark', 4500);
     playLandmark();
     log('CN Tower complete.', true);
+  }
+  if((placedType==='airport'||placedType==='stadium') && !milestones.landmark){
+    milestones.landmark=true;
+    showToast('Goal: <b>Landmark</b> — '+(placedType==='airport'?'Airport':'Stadium')+' opens!', 'landmark', 4000);
+    playLandmark();
+    log('Landmark built: '+placedType+'.', true);
+  }
+  if(!milestones.metroToronto && milestones.cntower && milestones.highpark && population>=5000){
+    milestones.metroToronto=true;
+    showToast('Goal: <b>Metro Toronto</b> — skyline, park &amp; 5k souls!', 'landmark', 5000);
+    playCelebrate();
+    log('Metro Toronto achieved.', true);
   }
   renderGoals();
 }
@@ -761,8 +1148,8 @@ function hideAlert(){
 function saveCity(silent){
   try{
     localStorage.setItem('metroTorontoCS', JSON.stringify({
-      grid, money, day, taxRates, seasonIdx, year, happiness, strikeUntil,
-      settings:gameSettings, milestones, tutorialStep, tutorialActive, v:6
+      grid, money, day, taxRates, seasonIdx, year, happiness, strikeUntil, blizzardUntil,
+      settings:gameSettings, milestones, tutorialStep, tutorialActive, hist, audioMuted, v:7
     }));
     if(!silent) log('Saved.');
     return true;
@@ -770,12 +1157,18 @@ function saveCity(silent){
 }
 
 function loadMilestonesFromSave(s){
-  if(s&&s.milestones) milestones=Object.assign({firstPop:false,pop100:false,highpark:false,cntower:false}, s.milestones);
-  else milestones={firstPop:population>=1,pop100:population>=100,highpark:false,cntower:false};
+  if(s&&s.milestones) milestones=Object.assign({firstPop:false,pop100:false,pop1k:false,pop10k:false,highpark:false,cntower:false,landmark:false,metroToronto:false}, s.milestones);
+  else milestones={firstPop:population>=1,pop100:population>=100,pop1k:population>=1000,pop10k:population>=10000,highpark:false,cntower:false,landmark:false,metroToronto:false};
   if(typeof s.tutorialStep==='number') tutorialStep=s.tutorialStep;
   if(typeof s.tutorialActive==='boolean') tutorialActive=s.tutorialActive;
   else tutorialActive=false;
   if(population>=1){ milestones.firstPop=true; tutorialActive=false; }
+  if(s&&s.hist){
+    hist.pop=s.hist.pop||[]; hist.jobs=s.hist.jobs||[]; hist.money=s.hist.money||[];
+    hist.traffic=s.hist.traffic||[]; hist.happiness=s.hist.happiness||[];
+  }
+  if(typeof s.audioMuted==='boolean') setAudioMuted(s.audioMuted);
+  if(typeof s.blizzardUntil==='number') blizzardUntil=s.blizzardUntil;
 }
 
 function startAutosave(){
@@ -807,7 +1200,7 @@ function rebuildLabelDom(){
 function makeTerrain(){
   grid=[]; landmarks=[];
   for(let x=0;x<COLS;x++){grid[x]=[];for(let y=0;y<ROWS;y++){
-    grid[x][y]={terrain:'land',type:'empty',level:0,landValue:40,pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,parkId:null,parkName:null,spec:null,island:false};
+    grid[x][y]={terrain:'land',type:'empty',level:0,landValue:40,pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,parkId:null,parkName:null,spec:null,island:false,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false};
   }}
   // Lake Ontario
   for(let x=0;x<COLS;x++){
@@ -910,39 +1303,65 @@ function isZone(t){return ZONE_TYPES.has(t.type)}
 makeTerrain();
 money=Number(gameSettings.money); if(!Number.isFinite(money)) money=55000;
 seasonIdx=clamp(Number(gameSettings.season)||0, 0, 3);
-day=0; year=1; happiness=62; strikeUntil=-1;
+day=0; year=1; happiness=62; strikeUntil=-1; blizzardUntil=-1;
+transitRiders=0; burningTiles=0; floodedTiles=0;
+hist.pop=[]; hist.jobs=[]; hist.money=[]; hist.traffic=[]; hist.happiness=[];
 
 /* ---- Three.js + custom orbit (RTS / city-builder) ---- */
 const wrap=document.getElementById('wrap');
 const canvas=document.getElementById('game');
-const renderer=new THREE.WebGLRenderer({canvas, antialias:false, powerPreference:'high-performance'});
-renderer.setPixelRatio(1);
-renderer.setClearColor(0x0c1a24);
+const renderer=new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.75));
+/* Harbour daylight clear — avoid near-black void behind the map */
+renderer.setClearColor(0x3a6a7a);
 renderer.shadowMap.enabled=false;
+/* Linear output: sRGBEncoding + Phong midtones read near-black on many GPUs.
+   ACES is also banned — filmic crush made the whole city unreadable. */
+if(THREE.LinearEncoding!==undefined) renderer.outputEncoding=THREE.LinearEncoding;
+renderer.toneMapping=THREE.NoToneMapping;
+renderer.toneMappingExposure=1.15;
 
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0x152830, 0.0065);
+scene.background=new THREE.Color(0x3a6a7a);
+scene.fog=new THREE.FogExp2(0x4a7a88, 0.0011);
 const camera=new THREE.PerspectiveCamera(42,1,0.1,400);
 /* North of the 401, looking south at downtown / harbour */
 const y401cam=Math.floor(ROWS*0.28);
 camera.position.set(COLS*0.48, 42, y401cam - 18);
 
 const ORBIT_DEG=Math.PI/180;
+const _orbitLook=Math.floor(ROWS*0.55);
 const orbit={
-  target:new THREE.Vector3(COLS*0.48, 0, Math.floor(ROWS*0.55)),
+  target:new THREE.Vector3(COLS*0.48, 0, _orbitLook),
+  targetGoal:new THREE.Vector3(COLS*0.48, 0, _orbitLook),
   spherical:new THREE.Spherical(),
   goal:new THREE.Spherical(),
   rotating:false, panning:false, paintingActive:false,
   pointerId:null,
   lastX:0, lastY:0,
-  rotateSpeed:0.0045,
+  rmbDrag:0,
+  rotateSpeed:0.0052,
+  tiltSpeed:0.0042,
   panFactor:0.0014,
-  keyPanFactor:0.75,
-  minR:12, maxR:90,
-  minPhi:25*ORBIT_DEG,
-  maxPhi:78*ORBIT_DEG
+  keyPanFactor:0.52,
+  edgePanFactor:0.42,
+  dampOrbit:15,
+  dampTarget:18,
+  minR:10, maxR:95,
+  minPhi:18*ORBIT_DEG,
+  maxPhi:82*ORBIT_DEG
 };
-const camKeys={w:false,a:false,s:false,d:false,up:false,down:false,left:false,right:false,shift:false,space:false};
+/* Cities: Skylines-style keys — WASD pan, Q/E rotate, Z/X zoom, Home/End tilt */
+const camKeys={
+  w:false,a:false,s:false,d:false,
+  up:false,down:false,left:false,right:false,
+  q:false,e:false,z:false,x:false,home:false,end:false,
+  shift:false
+};
+/* Edge strengths 0..1 (soft falloff — no binary flicker) */
+const edgeScroll={l:0,r:0,t:0,b:0};
+let _ptrClientX=0, _ptrClientY=0;
+let _ptrOverWrap=false;
 const _panRight=new THREE.Vector3();
 const _panFwd=new THREE.Vector3();
 const _panUp=new THREE.Vector3(0,1,0);
@@ -959,20 +1378,35 @@ orbit.spherical.radius=clamp(orbit.spherical.radius, orbit.minR, orbit.maxR);
 orbit.goal.copy(orbit.spherical);
 
 function applyOrbitToCamera(){
-  _zoomOffset.setFromSpherical(orbit.goal);
+  _zoomOffset.setFromSpherical(orbit.spherical);
   camera.position.copy(orbit.target).add(_zoomOffset);
   camera.lookAt(orbit.target);
 }
 function updateCamera(){ applyOrbitToCamera(); }
 
-/* Instant camera — no damping lag */
+function damp01(rate, dt){ return 1-Math.exp(-rate*dt); }
+
 function stepCamera(dt){
-  if(!(orbit.rotating||orbit.panning||orbit.paintingActive)) panOrbitKeys(dt);
+  const d=Math.max(0.0001, Math.min(0.05, dt));
+  if(!(orbit.rotating||orbit.paintingActive||orbit.panning)){
+    panFromInput(d);
+  } else {
+    edgeScroll.l=edgeScroll.r=edgeScroll.t=edgeScroll.b=0;
+  }
+  if(!orbit.paintingActive) keyRotateTiltZoom(d);
+  /* Light damping — stable C:S feel, not rubbery lag */
+  const sk=damp01(orbit.dampOrbit, d);
+  const tk=damp01(orbit.dampTarget, d);
+  orbit.spherical.theta+=(orbit.goal.theta-orbit.spherical.theta)*sk;
+  orbit.spherical.phi+=(orbit.goal.phi-orbit.spherical.phi)*sk;
+  orbit.spherical.radius+=(orbit.goal.radius-orbit.spherical.radius)*sk;
+  orbit.target.lerp(orbit.targetGoal, tk);
   applyOrbitToCamera();
 }
 
 function getPanAxes(){
-  _zoomOffset.setFromSpherical(orbit.goal);
+  /* Use smoothed spherical so pan axes don't jitter while orbit catches up */
+  _zoomOffset.setFromSpherical(orbit.spherical);
   _panEye.copy(orbit.target).add(_zoomOffset);
   _panFwd.copy(orbit.target).sub(_panEye);
   if(_panFwd.lengthSq()<1e-8) camera.getWorldDirection(_panFwd);
@@ -984,6 +1418,9 @@ function getPanAxes(){
 }
 
 function clampOrbitTarget(){
+  orbit.targetGoal.x=clamp(orbit.targetGoal.x, 2, COLS-2);
+  orbit.targetGoal.z=clamp(orbit.targetGoal.z, 2, ROWS-2);
+  orbit.targetGoal.y=0;
   orbit.target.x=clamp(orbit.target.x, 2, COLS-2);
   orbit.target.z=clamp(orbit.target.z, 2, ROWS-2);
   orbit.target.y=0;
@@ -991,100 +1428,637 @@ function clampOrbitTarget(){
 
 function panOrbit(dxPx, dyPx){
   getPanAxes();
-  const speed=orbit.goal.radius*orbit.panFactor;
-  orbit.target.addScaledVector(_panRight, -dxPx*speed);
-  orbit.target.addScaledVector(_panFwd, -dyPx*speed);
+  const speed=orbit.spherical.radius*orbit.panFactor;
+  /* X: grab-drag left/right (unchanged). Y: inverted so drag-up pans the map “up”. */
+  orbit.targetGoal.addScaledVector(_panRight, -dxPx*speed);
+  orbit.targetGoal.addScaledVector(_panFwd, dyPx*speed);
   clampOrbitTarget();
 }
 
-function panOrbitKeys(dt){
+/* One combined pan velocity (WASD + edge) applied once per frame */
+function panFromInput(dt){
   let kx=0, kz=0;
   if(camKeys.a||camKeys.left) kx-=1;
   if(camKeys.d||camKeys.right) kx+=1;
   if(camKeys.w||camKeys.up) kz-=1;
   if(camKeys.s||camKeys.down) kz+=1;
-  if(!kx&&!kz) return;
+  if(_ptrOverWrap && !(orbit.rotating||orbit.paintingActive||orbit.panning)){
+    kx+=edgeScroll.r-edgeScroll.l;
+    kz+=edgeScroll.b-edgeScroll.t;
+  }
+  if(Math.abs(kx)<1e-4 && Math.abs(kz)<1e-4) return;
   getPanAxes();
-  const speed=orbit.goal.radius*orbit.keyPanFactor*dt;
+  const boost=camKeys.shift?1.85:1;
+  const speed=orbit.spherical.radius*orbit.keyPanFactor*dt*boost;
   const len=Math.hypot(kx,kz)||1;
   kx/=len; kz/=len;
-  orbit.target.addScaledVector(_panRight, kx*speed);
-  orbit.target.addScaledVector(_panFwd, -kz*speed);
+  orbit.targetGoal.addScaledVector(_panRight, kx*speed);
+  orbit.targetGoal.addScaledVector(_panFwd, -kz*speed);
   clampOrbitTarget();
 }
 
+function clearEdgeScroll(){ edgeScroll.l=edgeScroll.r=edgeScroll.t=edgeScroll.b=0; }
+
+function updateEdgeScroll(clientX, clientY){
+  if(orbit.rotating||orbit.paintingActive||orbit.panning||!_ptrOverWrap){ clearEdgeScroll(); return; }
+  const rect=wrap.getBoundingClientRect();
+  if(clientX<rect.left||clientX>rect.right||clientY<rect.top||clientY>rect.bottom){
+    clearEdgeScroll(); return;
+  }
+  /* Soft zone — strength fades out, no on/off flicker at the boundary */
+  const zone=38;
+  const dl=clientX-rect.left, dr=rect.right-clientX, dt=clientY-rect.top, db=rect.bottom-clientY;
+  edgeScroll.l=dl<zone?1-dl/zone:0;
+  edgeScroll.r=dr<zone?1-dr/zone:0;
+  edgeScroll.t=dt<zone?1-dt/zone:0;
+  edgeScroll.b=db<zone?1-db/zone:0;
+}
+
+function keyRotateTiltZoom(dt){
+  const boost=camKeys.shift?1.7:1;
+  if(camKeys.q) rotateOrbit(95*dt*boost, 0);
+  if(camKeys.e) rotateOrbit(-95*dt*boost, 0);
+  if(camKeys.home) rotateOrbit(0, -78*dt*boost);
+  if(camKeys.end) rotateOrbit(0, 78*dt*boost);
+  if(camKeys.z) zoomOrbit(-360*dt*boost);
+  if(camKeys.x) zoomOrbit(360*dt*boost);
+}
+
 function rotateOrbit(dxPx, dyPx){
+  /* C:S middle-mouse: X = yaw, Y = tilt — writes goal; spherical damps toward it */
+  if(!dxPx && !dyPx) return;
   orbit.goal.theta-=dxPx*orbit.rotateSpeed;
-  orbit.goal.phi=clamp(orbit.goal.phi-dyPx*orbit.rotateSpeed, orbit.minPhi, orbit.maxPhi);
+  orbit.goal.phi=clamp(orbit.goal.phi-dyPx*orbit.tiltSpeed, orbit.minPhi, orbit.maxPhi);
 }
 
-function zoomOrbit(deltaY){
+function zoomOrbit(deltaY, towardClientX, towardClientY){
   if(orbit.paintingActive) return;
-  const factor=Math.exp(deltaY*0.001);
+  const prevR=orbit.goal.radius;
+  const factor=Math.exp(deltaY*0.00105);
   orbit.goal.radius=clamp(orbit.goal.radius*factor, orbit.minR, orbit.maxR);
+  /* Damped zoom-toward-cursor — small targetGoal nudge, no hard jumps */
+  if(towardClientX!=null && Math.abs(orbit.goal.radius-prevR)>0.01){
+    const hit=pickGroundPoint(towardClientX, towardClientY);
+    if(hit){
+      const t=clamp(((prevR-orbit.goal.radius)/prevR)*0.22, 0, 0.18);
+      orbit.targetGoal.lerp(hit, t);
+      clampOrbitTarget();
+    }
+  }
 }
 
-const ambient=new THREE.AmbientLight(0xb0c4d0, 0.78);
+function pickGroundPoint(cx,cy){
+  const rect=canvas.getBoundingClientRect();
+  pointer.x=((cx-rect.left)/rect.width)*2-1;
+  pointer.y=-((cy-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(pointer,camera);
+  const hit=new THREE.Vector3();
+  if(raycaster.ray.intersectPlane(groundPlane,hit)) return hit;
+  return null;
+}
+
+/* Daylight city look — directional sun carries form; avoid ACES/sRGB black crush */
+const ambient=new THREE.AmbientLight(0xc8d8e4, 0.62);
 scene.add(ambient);
-const sun=new THREE.DirectionalLight(0xfff0d8, 0.95);
-sun.position.set(48,62,18);
+const sun=new THREE.DirectionalLight(0xfff2dc, 1.45);
+sun.position.set(48,62,28);
 sun.castShadow=false;
 scene.add(sun);
+const hemi=new THREE.HemisphereLight(0xb8d4e8, 0x4a6340, 0.48);
+scene.add(hemi);
+const rim=new THREE.DirectionalLight(0x90b0c0, 0.32);
+rim.position.set(-40,22,-30); scene.add(rim);
 
-/* Shared Lambert materials — Standard/PBR per-building was the FPS killer */
+/* Shared geometries — keep draw cost down while allowing cylinders/domes/fillets */
+const geoCache=new Map();
+function geo(key, factory){
+  let g=geoCache.get(key);
+  if(!g){ g=factory(); geoCache.set(key,g); }
+  return g;
+}
+function boxGeo(w,h,d){ return geo('b|'+w+'|'+h+'|'+d, ()=>new THREE.BoxGeometry(w,h,d)); }
+function cylGeo(rt,rb,h,seg){ return geo('c|'+rt+'|'+rb+'|'+h+'|'+(seg||10), ()=>new THREE.CylinderGeometry(rt,rb,h,seg||10)); }
+function sphGeo(r,ws,hs){ return geo('s|'+r+'|'+(ws||10)+'|'+(hs||8), ()=>new THREE.SphereGeometry(r,ws||10,hs||8)); }
+function coneGeo(r,h,seg){ return geo('n|'+r+'|'+h+'|'+(seg||6), ()=>new THREE.ConeGeometry(r,h,seg||6)); }
+function torGeo(r,t,rs,ts){ return geo('t|'+r+'|'+t+'|'+(rs||8)+'|'+(ts||12), ()=>new THREE.TorusGeometry(r,t,rs||8,ts||12)); }
+
+/* Shared materials + canvas facade textures (realistic look, few draw states) */
 const matCache=new Map();
-function mat(hex, opacity){
+const texCache=new Map();
+function makeFacadeTexture(kind){
+  const key=kind;
+  if(texCache.has(key)) return texCache.get(key);
+  const c=document.createElement('canvas'); c.width=64; c.height=128;
+  const ctx=c.getContext('2d');
+  /* Bright neutral base — material.color tints; stays readable without ACES */
+  ctx.fillStyle='rgb(210,214,218)'; ctx.fillRect(0,0,64,128);
+  if(kind==='glass'){
+    for(let y=4;y<124;y+=7){
+      for(let x=3;x<61;x+=8){
+        const lit=Math.random()>0.4;
+        ctx.fillStyle=lit?`rgba(255,236,190,${0.55+Math.random()*0.35})`:`rgba(18,32,48,${0.55+Math.random()*0.3})`;
+        ctx.fillRect(x,y,5,5);
+      }
+    }
+    ctx.fillStyle='rgba(210,230,245,0.18)'; ctx.fillRect(0,0,20,128);
+  } else if(kind==='brick'){
+    for(let y=2;y<126;y+=5){
+      const off=(y/5|0)%2?2:0;
+      for(let x=off;x<64;x+=8){
+        const v=12+Math.random()*22|0;
+        ctx.fillStyle=`rgb(${150+v},${140+v*0.7|0},${130+v*0.5|0})`;
+        ctx.fillRect(x,y,7,4);
+      }
+    }
+    for(let y=6;y<120;y+=11){
+      for(let x=5;x<58;x+=14){
+        ctx.fillStyle=Math.random()>0.5?'rgba(255,236,180,0.7)':'rgba(22,30,40,0.65)';
+        ctx.fillRect(x,y,4,5);
+      }
+    }
+  } else if(kind==='house'){
+    ctx.fillStyle='rgb(188,186,180)'; ctx.fillRect(0,0,64,128);
+    for(let y=18;y<100;y+=28){
+      for(let x=10;x<54;x+=22){
+        ctx.fillStyle='rgba(35,55,75,0.82)'; ctx.fillRect(x,y,12,14);
+        ctx.fillStyle='rgba(255,230,160,0.42)'; ctx.fillRect(x+1,y+1,10,6);
+      }
+    }
+    ctx.fillStyle='rgba(90,60,40,0.92)'; ctx.fillRect(26,96,12,28);
+  } else if(kind==='ind'){
+    for(let y=6;y<120;y+=10){
+      ctx.fillStyle=`rgba(0,0,0,${0.1+Math.random()*0.1})`; ctx.fillRect(0,y,64,2);
+      for(let x=6;x<58;x+=12){
+        ctx.fillStyle='rgba(30,38,32,0.6)'; ctx.fillRect(x,y+2,8,5);
+      }
+    }
+  } else {
+    for(let y=5;y<120;y+=9){
+      for(let x=4;x<60;x+=9){
+        ctx.fillStyle=Math.random()>0.5?'rgba(255,228,160,0.48)':'rgba(22,32,44,0.55)';
+        ctx.fillRect(x,y,6,6);
+      }
+    }
+  }
+  const tex=new THREE.CanvasTexture(c);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.anisotropy=4;
+  /* Keep linear — sRGB tex encoding + Linear renderer made facades ink-black */
+  if(THREE.LinearEncoding!==undefined) tex.encoding=THREE.LinearEncoding;
+  tex.needsUpdate=true;
+  texCache.set(key,tex);
+  return tex;
+}
+function facadeMap(kind, repeatY){
+  const rk=kind+'|ry'+repeatY;
+  if(texCache.has(rk)) return texCache.get(rk);
+  const base=makeFacadeTexture(kind);
+  const map=base.clone();
+  map.repeat.set(1, repeatY);
+  map.needsUpdate=true;
+  texCache.set(rk, map);
+  return map;
+}
+function mat(hex, opacity, kind){
   const op=opacity==null?1:opacity;
-  const key=(hex>>>0)+'|'+op;
+  let k=kind||'flat';
+  if(k==='office') k='glass';
+  const key=k+'|'+(hex>>>0)+'|'+op;
   let m=matCache.get(key);
   if(!m){
-    m=new THREE.MeshLambertMaterial({color:hex>>>0, transparent:op<1, opacity:op, depthWrite:op>=1});
+    /* Phong for form; soft emissive floor — never rely on broken instance vertexColors */
+    const em=((hex>>>0)&0xfefefe)>>2;
+    if(k==='flat'||op<1){
+      m=new THREE.MeshLambertMaterial({
+        color:hex>>>0, transparent:op<1, opacity:op, depthWrite:op>=1,
+        emissive:em, emissiveIntensity:0.12
+      });
+    } else if(k==='asphalt'||k==='curb'){
+      m=new THREE.MeshLambertMaterial({
+        color:hex>>>0, emissive:em, emissiveIntensity:0.08
+      });
+    } else {
+      const ry=k==='glass'?2.2:(k==='house'?1.05:1.5);
+      m=new THREE.MeshPhongMaterial({
+        color:hex>>>0, map:facadeMap(k, ry),
+        emissive:k==='glass'?0x152028:em,
+        emissiveIntensity:k==='glass'?0.14:0.1,
+        shininess:k==='glass'?48:18,
+        specular:k==='glass'?0x8899aa:0x333333
+      });
+    }
     matCache.set(key,m);
   }
   return m;
 }
 
-/* Lake Ontario underlay */
-const waterMat=new THREE.MeshLambertMaterial({color:0x156878});
+/* Lake Ontario underlay — Phong so water catches light */
+const waterMat=new THREE.MeshPhongMaterial({
+  color:0x2a9aac, transparent:true, opacity:0.88,
+  emissive:0x0a3040, emissiveIntensity:0.22,
+  shininess:64, specular:0x88c8d8
+});
 const waterPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS+28,ROWS+28), waterMat);
 waterPlane.rotation.x=-Math.PI/2; waterPlane.position.set(COLS/2,-0.85,ROWS/2); scene.add(waterPlane);
-/* Harbour depth tint plane (slightly darker, smaller) */
-const harbourMat=new THREE.MeshLambertMaterial({color:0x0a4050, transparent:true, opacity:0.55, depthWrite:false});
+const harbourMat=new THREE.MeshPhongMaterial({
+  color:0x1a6080, transparent:true, opacity:0.45, depthWrite:false,
+  emissive:0x082030, emissiveIntensity:0.2, shininess:42, specular:0x6aa8b8
+});
 const harbourPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS*0.55,10), harbourMat);
 harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(COLS*0.5,-0.72,ROWS-5); scene.add(harbourPlane);
 
 function applySeasonLook(){
   const s=seasonIdx;
-  if(s===0){ /* Spring — soft cool */
-    ambient.color.setHex(0xb8cdd8); ambient.intensity=0.72;
-    sun.color.setHex(0xfff4e4); sun.intensity=0.95;
-    scene.fog.color.setHex(0x163040); scene.fog.density=0.0072;
-    renderer.setClearColor(0x0d1c28);
-  } else if(s===1){ /* Summer — clearer, warmer */
-    ambient.color.setHex(0xc8d8e0); ambient.intensity=0.78;
-    sun.color.setHex(0xfff8ec); sun.intensity=1.05;
-    scene.fog.color.setHex(0x1a4050); scene.fog.density=0.0058;
-    renderer.setClearColor(0x102838);
-  } else if(s===2){ /* Fall — dusk amber */
-    ambient.color.setHex(0xc0a890); ambient.intensity=0.65;
-    sun.color.setHex(0xffc080); sun.intensity=0.85;
-    scene.fog.color.setHex(0x2a2830); scene.fog.density=0.0085;
-    renderer.setClearColor(0x181820);
-  } else { /* Winter — cool snow light */
-    ambient.color.setHex(0xd0dce8); ambient.intensity=0.72;
-    sun.color.setHex(0xe8f0ff); sun.intensity=0.9;
-    scene.fog.color.setHex(0x203040); scene.fog.density=0.0065;
-    renderer.setClearColor(0x142030);
+  if(s===0){ /* Spring */
+    ambient.color.setHex(0xc0d4e0); ambient.intensity=0.58;
+    sun.color.setHex(0xfff4e4); sun.intensity=1.4;
+    hemi.color.setHex(0xb0d0e0); hemi.groundColor.setHex(0x4a6540); hemi.intensity=0.45;
+    rim.color.setHex(0x90b0c0); rim.intensity=0.28;
+    scene.fog.color.setHex(0x4a7a88); scene.fog.density=0.0012;
+    scene.background.setHex(0x3a6a7a);
+    renderer.setClearColor(0x3a6a7a);
+  } else if(s===1){ /* Summer */
+    ambient.color.setHex(0xd0e0e8); ambient.intensity=0.62;
+    sun.color.setHex(0xfff8ec); sun.intensity=1.55;
+    hemi.color.setHex(0xc0dce8); hemi.groundColor.setHex(0x5a7a40); hemi.intensity=0.5;
+    rim.color.setHex(0xa0c0cc); rim.intensity=0.32;
+    scene.fog.color.setHex(0x4a8090); scene.fog.density=0.0009;
+    scene.background.setHex(0x3e7080);
+    renderer.setClearColor(0x3e7080);
+  } else if(s===2){ /* Fall */
+    ambient.color.setHex(0xd8c0a0); ambient.intensity=0.55;
+    sun.color.setHex(0xffd090); sun.intensity=1.35;
+    hemi.color.setHex(0xd8b080); hemi.groundColor.setHex(0x5a4830); hemi.intensity=0.42;
+    rim.color.setHex(0xb09878); rim.intensity=0.26;
+    scene.fog.color.setHex(0x5a5848); scene.fog.density=0.0013;
+    scene.background.setHex(0x3a3830);
+    renderer.setClearColor(0x3a3830);
+  } else { /* Winter */
+    ambient.color.setHex(0xd0dce8); ambient.intensity=0.6;
+    sun.color.setHex(0xf0f4ff); sun.intensity=1.4;
+    hemi.color.setHex(0xd8e4f0); hemi.groundColor.setHex(0x789098); hemi.intensity=0.48;
+    rim.color.setHex(0xa8c0d0); rim.intensity=0.3;
+    scene.fog.color.setHex(0x4a6070); scene.fog.density=0.001;
+    scene.background.setHex(0x345060);
+    renderer.setClearColor(0x345060);
   }
 }
 
 const hoverMesh=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.1,0.95), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
 hoverMesh.visible=false; scene.add(hoverMesh);
-const ghostMesh=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.45,0.7), new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:0.4,depthWrite:false}));
+const ghostMesh=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.45,0.7), new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:0.4,depthWrite:false,emissive:0x404040,emissiveIntensity:0.3}));
 ghostMesh.visible=false; scene.add(ghostMesh);
 
 let groundMesh=null;
+let groundWaterMesh=null;
+let groundRavineMesh=null;
+let groundShoreMesh=null, groundUrbanMesh=null, groundIslandMesh=null;
 const structureRoot=new THREE.Group(); scene.add(structureRoot);
+const agentRoot=new THREE.Group(); scene.add(agentRoot);
+const MAX_CARS=56, MAX_PPL=40;
+const carMat=new THREE.MeshLambertMaterial({color:0xd8dde2, emissive:0x303038, emissiveIntensity:0.2});
+const pplMat=mat(0xf0d2a0);
+const carMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.22,0.1,0.38), carMat, MAX_CARS);
+const pplMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.08,0.2,0.08), pplMat, MAX_PPL);
+carMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+pplMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+carMesh.frustumCulled=false; pplMesh.frustumCulled=false;
+agentRoot.add(carMesh); agentRoot.add(pplMesh);
+const _agentDummy=new THREE.Object3D();
+const _carColor=new THREE.Color();
+for(let i=0;i<MAX_CARS;i++){ _carColor.setHex(0xd8dde2); carMesh.setColorAt(i,_carColor); }
+if(carMesh.instanceColor) carMesh.instanceColor.needsUpdate=true;
+const cars=[]; const people=[];
+let roadList=[]; let agentSpawnTimer=0;
+for(let i=0;i<MAX_CARS;i++) cars.push({alive:false,x:0,z:0,tx:0,tz:0,gx:0,gy:0,nx:0,ny:0,t:1,speed:1.6,hue:0});
+for(let i=0;i<MAX_PPL;i++) people.push({alive:false,x:0,z:0,tx:0,tz:0,t:1,speed:0.7});
+function hideAgentInstance(mesh,i){
+  _agentDummy.position.set(0,-20,0); _agentDummy.scale.set(0.001,0.001,0.001); _agentDummy.rotation.set(0,0,0);
+  _agentDummy.updateMatrix(); mesh.setMatrixAt(i,_agentDummy.matrix);
+}
+function refreshRoadList(){
+  roadList=[];
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(isRoad(grid[x][y])) roadList.push(x,y);
+}
+function pickRoadNeighbor(gx,gy,fromX,fromY){
+  const opts=[];
+  const nbs=neighbors4(gx,gy);
+  for(let i=0;i<nbs.length;i++){
+    const a=nbs[i][0], b=nbs[i][1];
+    if(isRoad(grid[a][b])) opts.push([a,b]);
+  }
+  if(!opts.length) return null;
+  const fwd=opts.filter(([a,b])=>!(a===fromX&&b===fromY));
+  const pool=fwd.length?fwd:opts;
+  return pool[(Math.random()*pool.length)|0];
+}
+function laneOffset(dx, dy){
+  /* Right-hand drive: stay beside center line, never on it */
+  const o=0.15;
+  if(dx>0) return {ox:0, oz:o};
+  if(dx<0) return {ox:0, oz:-o};
+  if(dy>0) return {ox:-o, oz:0};
+  if(dy<0) return {ox:o, oz:0};
+  return {ox:0, oz:0};
+}
+function spawnCar(){
+  if(!roadList.length) return;
+  let slot=-1; for(let i=0;i<cars.length;i++) if(!cars[i].alive){slot=i;break}
+  if(slot<0) return;
+  const ri=(Math.random()*roadList.length/2|0)*2;
+  const gx=roadList[ri], gy=roadList[ri+1];
+  const next=pickRoadNeighbor(gx,gy,-1,-1)||[gx,gy];
+  const c=cars[slot];
+  c.alive=true; c.gx=gx; c.gy=gy; c.nx=next[0]; c.ny=next[1]; c.t=0;
+  const lo=laneOffset(next[0]-gx, next[1]-gy);
+  c.x=gx+0.5+lo.ox; c.z=gy+0.5+lo.oz; c.tx=next[0]+0.5+lo.ox; c.tz=next[1]+0.5+lo.oz;
+  c.speed=1.2+Math.random()*1.4+(avgTraffic>40?0.4:0);
+  c.hue=Math.random();
+  _carColor.setHSL(c.hue*0.08+0.02+(c.hue>0.5?0.55:0), 0.45, 0.48+Math.random()*0.18);
+  carMesh.setColorAt(slot,_carColor);
+  if(carMesh.instanceColor) carMesh.instanceColor.needsUpdate=true;
+}
+let walkSpots=[];
+function spawnPerson(){
+  if(population<1 || walkSpots.length<2) return;
+  let slot=-1; for(let i=0;i<people.length;i++) if(!people[i].alive){slot=i;break}
+  if(slot<0) return;
+  const k=(Math.random()*walkSpots.length/2|0)*2;
+  const p=people[slot];
+  p.alive=true; p.x=walkSpots[k]; p.z=walkSpots[k+1];
+  const j=(Math.random()*walkSpots.length/2|0)*2;
+  p.tx=walkSpots[j]; p.tz=walkSpots[j+1]; p.t=0; p.speed=0.55+Math.random()*0.5;
+}
+function stepAgents(dt){
+  const wantCars=Math.min(MAX_CARS, Math.floor(4+avgTraffic*0.35+population*0.04+jobs*0.03));
+  const wantPpl=Math.min(MAX_PPL, Math.floor(population*0.08+jobs*0.03));
+  let liveC=0, liveP=0;
+  for(const c of cars) if(c.alive) liveC++;
+  for(const p of people) if(p.alive) liveP++;
+  agentSpawnTimer+=dt;
+  if(agentSpawnTimer>0.35){
+    agentSpawnTimer=0;
+    if(liveC<wantCars) spawnCar();
+    if(liveP<wantPpl) spawnPerson();
+  }
+  for(let i=0;i<cars.length;i++){
+    const c=cars[i];
+    if(!c.alive){ hideAgentInstance(carMesh,i); continue; }
+    c.t+=dt*c.speed;
+    if(c.t>=1){
+      const prevX=c.gx, prevY=c.gy;
+      c.gx=c.nx; c.gy=c.ny;
+      if(!isRoad(grid[c.gx][c.gy])){ c.alive=false; hideAgentInstance(carMesh,i); continue; }
+      const next=pickRoadNeighbor(c.gx,c.gy, prevX, prevY);
+      if(!next){ c.alive=false; hideAgentInstance(carMesh,i); continue; }
+      const dx=next[0]-c.gx, dy=next[1]-c.gy;
+      c.nx=next[0]; c.ny=next[1]; c.t=0;
+      const cong=1+grid[c.nx][c.ny].traffic/70;
+      c.speed=(1.15+Math.random()*1.2)/cong;
+      const lo=laneOffset(dx, dy);
+      c.x=c.gx+0.5+lo.ox; c.z=c.gy+0.5+lo.oz;
+      c.tx=c.nx+0.5+lo.ox; c.tz=c.ny+0.5+lo.oz;
+    }
+    const u=c.t;
+    const px=c.x+(c.tx-c.x)*u, pz=c.z+(c.tz-c.z)*u;
+    const ang=Math.atan2(c.tx-c.x, c.tz-c.z);
+    const gx=clamp(c.gx|0,0,COLS-1), gy=clamp(c.gy|0,0,ROWS-1);
+    const elevY=roadDeckElev(gx, gy, grid[gx][gy])+0.18;
+    _agentDummy.position.set(px, elevY, pz);
+    _agentDummy.scale.set(1,1,1);
+    _agentDummy.rotation.set(0, ang, 0);
+    _agentDummy.updateMatrix();
+    carMesh.setMatrixAt(i,_agentDummy.matrix);
+  }
+  for(let i=0;i<people.length;i++){
+    const p=people[i];
+    if(!p.alive){ hideAgentInstance(pplMesh,i); continue; }
+    p.t+=dt*p.speed*0.35;
+    if(p.t>=1){
+      if(Math.random()<0.25){ p.alive=false; hideAgentInstance(pplMesh,i); continue; }
+      p.x=p.tx; p.z=p.tz; p.t=0;
+      p.tx=clamp(p.x+(Math.random()-0.5)*3, 1, COLS-1);
+      p.tz=clamp(p.z+(Math.random()-0.5)*3, 1, ROWS-1);
+    }
+    const u=p.t;
+    _agentDummy.position.set(p.x+(p.tx-p.x)*u, 0.22, p.z+(p.tz-p.z)*u);
+    _agentDummy.scale.set(1,1,1); _agentDummy.rotation.set(0,0,0);
+    _agentDummy.updateMatrix();
+    pplMesh.setMatrixAt(i,_agentDummy.matrix);
+  }
+  carMesh.instanceMatrix.needsUpdate=true;
+  pplMesh.instanceMatrix.needsUpdate=true;
+  carMesh.count=MAX_CARS; pplMesh.count=MAX_PPL;
+}
+
+function updateTraffic(){
+  /* Micropolis-style trip generation + congestion physics */
+  runTripGeneration();
+}
+
+function perimeterRoad(x,y){
+  const nbs=neighbors4(x,y);
+  for(let i=0;i<nbs.length;i++){
+    const a=nbs[i][0], b=nbs[i][1];
+    if(isRoad(grid[a][b])) return [a,b];
+  }
+  return null;
+}
+
+function zoneKindAt(x,y){
+  const def=toolById[grid[x][y].type];
+  if(!def||!isZone(grid[x][y])||grid[x][y].level<=0) return null;
+  return def.zone;
+}
+
+/* BFS along roads (Micropolis trip). Returns path cells or null. */
+function tripFind(sx,sy,maxSteps,wantZones){
+  const q=[sx,sy,0];
+  const seen=new Int32Array(COLS*ROWS);
+  const stamp=++tripStamp;
+  const parent=new Int32Array(COLS*ROWS); parent.fill(-1);
+  seen[sx*ROWS+sy]=stamp;
+  let qi=0, found=-1;
+  while(qi<q.length){
+    const x=q[qi++], y=q[qi++], d=q[qi++];
+    if(d>0){
+      for(const [a,b] of neighbors4(x,y)){
+        const zk=zoneKindAt(a,b);
+        if(zk&&wantZones.has(zk)){ found=x*ROWS+y; qi=q.length; break; }
+      }
+      if(found>=0) break;
+    }
+    if(d>=maxSteps) continue;
+    const nbs=neighbors4(x,y);
+    for(let i=0;i<nbs.length;i++){
+      const nx=nbs[i][0], ny=nbs[i][1];
+      if(!isRoad(grid[nx][ny])) continue;
+      const ni=nx*ROWS+ny;
+      if(seen[ni]===stamp) continue;
+      /* congestion cost: busy roads cost extra “distance” */
+      const cost=1+(grid[nx][ny].traffic>55?1:0)+(fundRoads<0.75?1:0);
+      if(d+cost>maxSteps) continue;
+      seen[ni]=stamp; parent[ni]=x*ROWS+y;
+      q.push(nx,ny,d+cost);
+    }
+  }
+  if(found<0) return null;
+  const path=[];
+  let cur=found;
+  while(cur>=0){
+    path.push((cur/ROWS)|0, cur%ROWS);
+    cur=parent[cur];
+  }
+  return path;
+}
+
+function paintTripTraffic(path, load){
+  for(let i=0;i<path.length;i+=2){
+    const t=grid[path[i]][path[i+1]];
+    if(isRoad(t)) t.traffic=Math.min(100, t.traffic+load);
+  }
+}
+
+function nearTransit(x,y,r){
+  const R=r||4;
+  for(let dx=-R;dx<=R;dx++)for(let dy=-R;dy<=R;dy++){
+    if(dx*dx+dy*dy>R*R) continue;
+    const nx=x+dx, ny=y+dy;
+    if(!inBounds(nx,ny)) continue;
+    if(TRANSIT_TYPES.has(grid[nx][ny].type)) return true;
+  }
+  return false;
+}
+
+function runTripGeneration(){
+  /* Decay traffic toward zero (Micropolis traffic decay) */
+  const blizzard=day<=blizzardUntil;
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y];
+    if(isRoad(t)) t.traffic=Math.max(0, t.traffic*0.78-(fundRoads>=1?0.4:0.1)+(blizzard?2:0));
+    t.tripFail=Math.max(0,(t.tripFail||0)*0.9);
+  }
+
+  let ok=0, fail=0, transitOk=0;
+  const origins=[];
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y], def=toolById[t.type];
+    if(!def||!t.level) continue;
+    if(def.zone==='res'||def.zone==='ind'||def.zone==='com'||def.zone==='off') origins.push(x,y,def.zone,t.level);
+  }
+  /* Sample trips — full scan every origin is too heavy */
+  const maxTrips=Math.min(48, Math.max(8, (origins.length/4)|0));
+  const strike=day<=strikeUntil;
+  for(let n=0;n<maxTrips;n++){
+    if(origins.length<4) break;
+    const oi=((Math.random()*origins.length/4)|0)*4;
+    const x=origins[oi], y=origins[oi+1], z=origins[oi+2], lvl=origins[oi+3];
+    const start=perimeterRoad(x,y);
+    if(!start){ fail++; grid[x][y].tripFail=(grid[x][y].tripFail||0)+1; continue; }
+    let want;
+    if(z==='res') want=new Set(['com','ind','off']); /* commute to work / shop */
+    else if(z==='ind') want=new Set(['com','off']); /* goods to market */
+    else want=new Set(['res']); /* customers / labour catchment */
+    const range=z==='res'?22:(z==='ind'?26:18);
+    const path=tripFind(start[0],start[1], range, want);
+    if(!path){
+      /* Transit network absorbs failed road trips when TTC is running */
+      if(!strike && nearTransit(x,y,5)){
+        ok++; transitOk++;
+        grid[x][y].tripFail=Math.max(0,(grid[x][y].tripFail||0)-1.2);
+      } else {
+        fail++;
+        grid[x][y].tripFail=(grid[x][y].tripFail||0)+1.5;
+      }
+    } else {
+      ok++;
+      let load=4+lvl*2.5;
+      if(!strike && nearTransit(x,y,4)){ load*=0.55; transitOk++; }
+      if(blizzard) load*=1.25;
+      paintTripTraffic(path, load);
+      grid[x][y].tripFail=Math.max(0,(grid[x][y].tripFail||0)-0.5);
+    }
+  }
+
+  let sum=0, nRoad=0;
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    if(!isRoad(grid[x][y])) continue;
+    sum+=grid[x][y].traffic; nRoad++;
+  }
+  avgTraffic=nRoad?sum/nRoad:0;
+  const total=ok+fail;
+  if(total>0){
+    tripStats.ok+=ok; tripStats.fail+=fail; tripStats.samples+=total;
+    /* EMA success rate */
+    const instant=ok/total;
+    tripStats.rate=tripStats.rate*0.85+instant*0.15;
+  }
+  transitRiders=Math.round(transitRiders*0.82 + transitOk*18*(strike?0.15:1));
+}
+
+function updateRCIValves(jobsResCapable){
+  /* Micropolis / SC4-style feedback valves */
+  const workers=Math.max(population*0.38,0);
+  const jobGap=jobs-workers;
+  const taxFeel=gameSettings.taxFeel||1;
+  externalMarket=clamp(18+year*2.4+Math.sin(day*0.04)*3+(population>0?8:0), 10, 85);
+
+  /* Residential: jobs available → people move in; unemployment / taxes push out */
+  demand.r=clamp(
+    12+jobGap*1.1 - taxRates.res*150*taxFeel + (happiness-50)*0.35 - avgPollution*0.25 - avgCrime*0.2 + (tripStats.rate-0.5)*30,
+    -100,100
+  );
+  /* Commercial: needs customers (pop) and some employment base */
+  demand.c=clamp(
+    8+(population*0.08-jobsResCapable.com*0.6) - taxRates.com*140*taxFeel + (tripStats.rate-0.5)*20,
+    -100,100
+  );
+  /* Industry: external GTA market + workforce — classic SimCity “steel town” driver */
+  demand.i=clamp(
+    externalMarket*0.55+(workers*0.15-jobsResCapable.ind*0.7) - taxRates.ind*130*taxFeel - avgPollution*0.1,
+    -100,100
+  );
+  /* Office: downtown gravity + educated labour */
+  demand.o=clamp(
+    6+(population*0.05-jobsResCapable.off*0.65) - taxRates.com*110*taxFeel + (happiness-55)*0.2,
+    -100,100
+  );
+  if(population===0&&jobs===0){
+    demand.r=48; demand.c=24; demand.i=28+externalMarket*0.15; demand.o=14;
+  }
+}
+
+function updateCrimeMap(svc){
+  let sum=0, n=0;
+  const policePower=(svc.police||0)*fundPolice;
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y];
+    if(t.terrain!=='land'){ t.crime=0; continue; }
+    const dens=isZone(t)&&t.level>0?t.level:0;
+    const cover=policePower>0?clamp(policePower*18/(1+Math.hypot(x-cityCenter.x,y-cityCenter.y)*0.15),0,1):0;
+    /* police stations also stamp local coverage */
+    let local=cover;
+    if(eduInf){ /* reuse nearby svc via distance to police tiles — cheap approx */ }
+    t.crime=clamp(dens*12*(1-local*0.85)*(1-t.landValue/140)+avgTraffic*0.04, 0, 100);
+    if(t.terrain==='land'){ sum+=t.crime; n++; }
+  }
+  /* boost coverage near actual police */
+  if((svc.police||0)>0){
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+      if(toolById[grid[x][y].type]?.svc==='police'){
+        for(let dx=-8;dx<=8;dx++)for(let dy=-8;dy<=8;dy++){
+          const nx=x+dx, ny=y+dy;
+          if(!inBounds(nx,ny)) continue;
+          const d=Math.hypot(dx,dy); if(d>8) continue;
+          grid[nx][ny].crime=Math.max(0, grid[nx][ny].crime*(1-fundPolice*0.12*(1-d/8)));
+        }
+      }
+    }
+    sum=0; n=0;
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(grid[x][y].terrain==='land'){sum+=grid[x][y].crime;n++}
+  }
+  avgCrime=n?sum/n:0;
+}
 const structureKey=new Map();
 const _dummy=new THREE.Object3D();
 const _color=new THREE.Color();
@@ -1132,12 +2106,68 @@ function waterTileColor(x,y){
   const depth=noise2(x*0.3,y*0.3);
   return depth>0.55?0x0c4860:0x125868; /* Lake Ontario deep */
 }
+/* Don / Humber ravines are river channels — teal water, not green grass */
+function ravineWaterColor(x,y){
+  const bank=nearTerrain(x,y,'land',1);
+  const n=noise2(x*0.45,y*0.45);
+  if(seasonIdx===3) return bank?0x4a7088:0x3a6078; /* winter ice-teal */
+  if(bank) return n>0.5?0x2a8898:0x2490a0;
+  return n>0.55?0x1a6a80:0x1e7890;
+}
+function roadDeckElev(x,y,t){
+  if(!isRoad(t)) return 0.12;
+  const def=toolById[t.type];
+  const isBr=!!(def&&def.bridge);
+  const overWater=t.terrain==='ravine'||t.terrain==='water';
+  /* Span over water/ravine */
+  if(isBr&&overWater) return 0.72;
+  /* Bridge approach on land next to water */
+  if(isBr&&(nearTerrain(x,y,'ravine',1)||nearTerrain(x,y,'water',1))) return 0.46;
+  /* Smooth ramp: any road near an elevated bridge span */
+  let elev=0.14;
+  for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
+    if(!dx&&!dy) continue;
+    const nx=x+dx, ny=y+dy;
+    if(!inBounds(nx,ny)) continue;
+    const nt=grid[nx][ny];
+    if(!isRoad(nt)) continue;
+    const nd=toolById[nt.type];
+    if(!(nd&&nd.bridge)) continue;
+    if(nt.terrain!=='ravine'&&nt.terrain!=='water') continue;
+    const dist=Math.abs(dx)+Math.abs(dy);
+    if(dist===1) elev=Math.max(elev, 0.46);
+    else if(dist===2) elev=Math.max(elev, 0.28);
+  }
+  if(isBr) elev=Math.max(elev, 0.14);
+  return elev;
+}
 
 function rebuildGround(){
   if(!groundMesh){
-    const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.98,1,0.98), new THREE.MeshLambertMaterial({}), COLS*ROWS);
-    groundMesh=mesh;
-    scene.add(mesh);
+    /* Lit Lambert, one material per terrain class — NO vertexColors / setColorAt
+       (that combo painted the map black when instance colors were uninitialized) */
+    const landMat=new THREE.MeshLambertMaterial({color:0x6e8f5a, emissive:0x1a2814, emissiveIntensity:0.1});
+    const shoreMat=new THREE.MeshLambertMaterial({color:0x8a9078, emissive:0x202418, emissiveIntensity:0.08});
+    const urbanMat=new THREE.MeshLambertMaterial({color:0x7a7e78, emissive:0x181818, emissiveIntensity:0.08});
+    const islandMat=new THREE.MeshLambertMaterial({color:0x4a8a48, emissive:0x142814, emissiveIntensity:0.12});
+    const waterTileMat=new THREE.MeshPhongMaterial({
+      color:0x2a8fa3, emissive:0x0a3040, emissiveIntensity:0.18,
+      shininess:40, specular:0x66aacc, transparent:true, opacity:0.92
+    });
+    const ravMat=new THREE.MeshPhongMaterial({
+      color:0x2490a0, emissive:0x0a2838, emissiveIntensity:0.16,
+      shininess:36, specular:0x55a0b0, transparent:true, opacity:0.9
+    });
+    const tileGeo=new THREE.BoxGeometry(0.98,1,0.98);
+    groundMesh=new THREE.InstancedMesh(tileGeo, landMat, COLS*ROWS);
+    groundShoreMesh=new THREE.InstancedMesh(tileGeo, shoreMat, COLS*ROWS);
+    groundUrbanMesh=new THREE.InstancedMesh(tileGeo, urbanMat, COLS*ROWS);
+    groundIslandMesh=new THREE.InstancedMesh(tileGeo, islandMat, COLS*ROWS);
+    groundWaterMesh=new THREE.InstancedMesh(tileGeo, waterTileMat, COLS*ROWS);
+    groundRavineMesh=new THREE.InstancedMesh(tileGeo, ravMat, COLS*ROWS);
+    [groundMesh,groundShoreMesh,groundUrbanMesh,groundIslandMesh,groundWaterMesh,groundRavineMesh].forEach(m=>{
+      m.frustumCulled=false; scene.add(m);
+    });
   }
   refreshGroundInstances();
 }
@@ -1145,23 +2175,46 @@ function rebuildGround(){
 /* Update ground in place — never dispose/recreate (stops map flicker) */
 function refreshGroundInstances(){
   if(!groundMesh) return;
-  let i=0;
+  let iLand=0, iShore=0, iUrban=0, iIsland=0, iWater=0, iRav=0;
+  const hideMat=new THREE.Matrix4().makeScale(0.001,0.001,0.001);
+  hideMat.setPosition(0,-40,0);
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y];
-    let h=0.18,y0=0.09,col=landColor(t,x,y);
+    let h=0.18,y0=0.09;
     if(t.terrain==='water'){
       const shore=nearTerrain(x,y,'land',1)||nearTerrain(x,y,'ravine',1);
-      h=shore?0.12:0.08; y0=shore?-0.22:-0.38; col=waterTileColor(x,y);
+      h=shore?0.12:0.08; y0=shore?-0.22:-0.38;
+      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      groundWaterMesh.setMatrixAt(iWater++,_dummy.matrix);
     } else if(t.terrain==='ravine'){
-      h=0.38; y0=-0.1; col=seasonIdx===3?0x3a5540:0x1a3820;
+      h=0.12; y0=-0.32;
+      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      groundRavineMesh.setMatrixAt(iRav++,_dummy.matrix);
     } else if(t.island){
       h=0.22; y0=0.11;
+      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      groundIslandMesh.setMatrixAt(iIsland++,_dummy.matrix);
+    } else if(nearTerrain(x,y,'water',1)){
+      const lvBoost=(t.landValue||40)>70?0.04:0;
+      _dummy.position.set(x+0.5,y0+lvBoost,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      groundShoreMesh.setMatrixAt(iShore++,_dummy.matrix);
+    } else if((t.landValue||40)>62){
+      const lvBoost=0.04;
+      _dummy.position.set(x+0.5,y0+lvBoost,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      groundUrbanMesh.setMatrixAt(iUrban++,_dummy.matrix);
+    } else {
+      const lvBoost=(t.landValue||40)>70?0.04:0;
+      _dummy.position.set(x+0.5,y0+lvBoost,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      groundMesh.setMatrixAt(iLand++,_dummy.matrix);
     }
-    _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-    groundMesh.setMatrixAt(i,_dummy.matrix); _color.setHex(col); groundMesh.setColorAt(i,_color); i++;
   }
-  groundMesh.instanceMatrix.needsUpdate=true;
-  if(groundMesh.instanceColor) groundMesh.instanceColor.needsUpdate=true;
+  const hideRest=(mesh, start)=>{ while(start<COLS*ROWS) mesh.setMatrixAt(start++, hideMat); mesh.instanceMatrix.needsUpdate=true; };
+  hideRest(groundMesh, iLand);
+  hideRest(groundShoreMesh, iShore);
+  hideRest(groundUrbanMesh, iUrban);
+  hideRest(groundIslandMesh, iIsland);
+  hideRest(groundWaterMesh, iWater);
+  hideRest(groundRavineMesh, iRav);
   worldDirty=false;
 }
 
@@ -1173,15 +2226,18 @@ function structureHeight(t){
   if(def&&def.power) return def.id==='wind'?2.2:1.3;
   if(def&&def.water) return def.id==='watertower'?1.9:1.0;
   if(isZone(t)){
-    if(t.level<=0) return 0.1;
+    if(t.level<=0) return 0.08;
     const high=def&&def.density==='high';
-    const downtownBoost=t.landValue>70?1.25:1;
+    const lv=t.level|0;
+    const downtownBoost=t.landValue>70?1.2:1;
     if(high){
-      /* towers scale hard — skyline feel */
-      return (0.45+t.level*1.15+(t.level>=4?t.level*0.35:0))*downtownBoost;
+      /* L1 pad house → L5 skyline tower */
+      const base=[0, 0.55, 1.15, 2.2, 3.6, 5.2][clamp(lv,0,5)]||0.55;
+      return base*downtownBoost*(t.abandoned?0.85:1);
     }
-    /* houses → brick midrise */
-    return (0.28+t.level*0.42+(t.level>=3?0.25:0))*downtownBoost;
+    /* Low density: house → walk-up → low midrise (capped ~3) */
+    const base=[0, 0.42, 0.85, 1.45, 1.9, 2.2][clamp(lv,0,5)]||0.42;
+    return base*downtownBoost*(t.abandoned?0.85:1);
   }
   if(t.type==='stadium'||t.type==='airport') return 1.6;
   if(t.type==='university'||t.type==='hospital') return 1.3;
@@ -1193,14 +2249,14 @@ function tileColor(t){
   const def=toolById[t.type];
   if(def&&def.parkColor) return def.parkColor;
   if(isRoad(t)){
+    /* Continuous asphalt family — bridges match roads (not brown orphan decks) */
     let base=0x3a4048;
     if(t.type==='highway'||t.type==='hwybridge') base=0x2e3238;
     else if(t.type==='avenue') base=0x3d4650;
     else if(t.type==='gravel') base=0x6b6358;
     else if(t.type==='bike') base=0x3d5a48;
-    else if(t.type==='transit'||t.type==='transitbridge') base=0x6a2830;
-    else if(t.type==='bridge') base=0x5a5040;
-    /* traffic tint — warmer when busy */
+    else if(t.type==='transit'||t.type==='transitbridge') base=0x4a3038;
+    else if(t.type==='bridge') base=0x3a4048;
     if(t.traffic>25){
       const tr=clamp(t.traffic/100,0,1);
       const r=Math.min(255, ((base>>16)&0xff)+tr*70);
@@ -1239,8 +2295,7 @@ function disposeObject3D(obj){
   if(obj.children&&obj.children.length){
     [...obj.children].forEach(c=>disposeObject3D(c));
   }
-  if(obj.geometry) obj.geometry.dispose();
-  /* materials shared via mat() — do not dispose */
+  /* geoCache + mat() are shared — do not dispose */
 }
 
 function clearStructures(){
@@ -1255,12 +2310,25 @@ function clearStructures(){
 function addWindowEmissive(){ /* disabled — per-window meshes tanked FPS */ }
 
 function structureSig(t){
-  return t.type+'|'+t.level+'|'+(t.parkId||'')+'|'+(t.spec||'');
+  /* Include terrain + deck elev class so bridge↔road joins refresh */
+  return t.type+'|'+t.level+'|'+(t.parkId||'')+'|'+(t.spec||'')+'|'+((t.buildPhase|0)>0?'c':'f')+'|'+(t.burning?'b':'')+'|'+(t.flooded?'w':'')+'|'+(t.abandoned?'a':'')+'|'+t.terrain;
+}
+function roadNeighborSig(x,y){
+  /* Force road/bridge mesh rebuild when nearby road network / elev changes */
+  let s='';
+  for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
+    if(!dx&&!dy) continue;
+    const nx=x+dx, ny=y+dy;
+    if(!inBounds(nx,ny)){ s+='.'; continue; }
+    const nt=grid[nx][ny];
+    s+=isRoad(nt)?(nt.type[0]+roadDeckElev(nx,ny,nt).toFixed(2)):'-';
+  }
+  return s+':'+roadDeckElev(x,y,grid[x][y]).toFixed(2);
 }
 
 function upsertStructure(x,y){
   const key=x+','+y, t=grid[x][y], old=structureKey.get(key);
-  const sig=structureSig(t);
+  const sig=structureSig(t)+(isRoad(t)?'|'+roadNeighborSig(x,y):'');
   /* Keep existing mesh if nothing visual changed — stops flicker */
   if(old && t.type!=='empty' && old.userData && old.userData.sig===sig) return;
   if(old){structureRoot.remove(old); disposeObject3D(old); structureKey.delete(key)}
@@ -1268,119 +2336,404 @@ function upsertStructure(x,y){
   const def=toolById[t.type];
   const h=structureHeight(t);
   const bridge=def&&def.bridge;
-  const elev=bridge?0.72:(isRoad(t)?0.14:0.12);
+  const elev=isRoad(t)?roadDeckElev(x,y,t):(bridge?0.68:0.12);
   let mesh;
 
   /* ---- CN Tower ploppable ---- */
   if(t.type==='cntower'){
     const g=new THREE.Group();
-    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.22,4.2,8), mat(0xd0d4d8));
-    shaft.position.y=2.1; g.add(shaft);
-    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.38,0.35,10), mat(0xb8c0c8));
-    pod.position.y=3.9; g.add(pod);
-    const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.08,1.6,6), mat(0xc8102e));
-    tip.position.y=5.0; g.add(tip);
-    const base=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.2,0.7), mat(0x6a7078));
-    base.position.y=0.1; g.add(base);
-    const glow=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.2,6), mat(0xc8102e));
-    glow.position.y=5.7; g.add(glow);
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.2,4.4,16), mat(0xd8dce0,1,'flat'));
+    shaft.position.y=2.2; g.add(shaft);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.28,0.04,8,20), mat(0xa8b0b8));
+    ring.rotation.x=Math.PI/2; ring.position.y=3.55; g.add(ring);
+    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.42,0.42,16), mat(0xc0c8d0,1,'glass'));
+    pod.position.y=3.95; g.add(pod);
+    const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.07,1.7,8), mat(0xd0122d));
+    tip.position.y=5.15; g.add(tip);
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.48,0.28,12), mat(0x6a7078));
+    base.position.y=0.14; g.add(base);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(0.07,8,8), mat(0xff3048));
+    glow.position.y=5.95; g.add(glow);
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
   /* ---- Parks with Toronto foliage ---- */
   else if(def&&def.park){
     const g=new THREE.Group();
     const grassCol=def.parkColor||0x3d6b35;
-    const base=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.1,0.92), mat(grassCol));
-    base.position.y=0.05; g.add(base);
-    /* path */
-    const path=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.02,0.7), mat(0xb8a878));
-    path.position.set(0,0.11,0); g.add(path);
-    /* trees */
-    const treeN=def.parkId==='highpark'?3:(def.parkName?2:1);
+    const base=new THREE.Mesh(cylGeo(0.48,0.48,0.08,12), mat(grassCol,1,'flat'));
+    base.position.y=0.04; g.add(base);
+    const path=new THREE.Mesh(torGeo(0.22,0.05,6,14), mat(0xc2b08a,1,'flat'));
+    path.rotation.x=Math.PI/2; path.position.y=0.09; g.add(path);
+    const plaza=new THREE.Mesh(cylGeo(0.14,0.14,0.03,10), mat(0xb8a878,1,'flat'));
+    plaza.position.y=0.1; g.add(plaza);
+    const treeN=def.parkId==='highpark'?4:(def.parkName?3:2);
     for(let i=0;i<treeN;i++){
-      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,0.18,5), mat(0x5a4030));
-      const foliage=new THREE.Mesh(new THREE.ConeGeometry(0.16+i*0.02, 0.38, 5), mat(i%2?0x2a5528:0x3a6a30));
+      const trunk=new THREE.Mesh(cylGeo(0.028,0.04,0.22,6), mat(0x5a4030,1,'flat'));
+      const foliage=new THREE.Mesh(sphGeo(0.16+i*0.015, 7, 6), mat(i%2?0x2d5a30:0x3f6e38,1,'flat'));
+      const canopy=new THREE.Mesh(sphGeo(0.11, 6, 5), mat(0x4a7a40,1,'flat'));
       const px=(noise2(x*3+i,y)-0.5)*0.55, pz=(noise2(x,y*3+i)-0.5)*0.55;
-      trunk.position.set(px,0.18,pz); foliage.position.set(px,0.42,pz);
-      g.add(trunk); g.add(foliage);
+      trunk.position.set(px,0.2,pz); foliage.position.set(px,0.42,pz); canopy.position.set(px+0.04,0.5,pz-0.03);
+      g.add(trunk); g.add(foliage); g.add(canopy);
     }
-    /* park bench for named Toronto parks */
     if(def.parkId){
-      const bench=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.04,0.1), mat(0x6a5040));
-      bench.position.set(0.28,0.14,-0.28); g.add(bench);
+      const bench=new THREE.Mesh(boxGeo(0.3,0.05,0.1), mat(0x6a5040,1,'flat'));
+      bench.position.set(0.28,0.12,-0.28); g.add(bench);
     }
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
   /* ---- Wind turbine ---- */
   else if(t.type==='wind'){
     const g=new THREE.Group();
-    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.0,6), mat(0xd0d8e0));
-    pole.position.y=1; g.add(pole);
-    const blade=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.08,0.12), mat(0xffffff));
-    blade.position.y=2; g.add(blade);
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.08,2.1,8), mat(0xe8eef2));
+    pole.position.y=1.05; g.add(pole);
+    const hub=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8), mat(0xd0d8e0));
+    hub.position.y=2.1; g.add(hub);
+    for(let i=0;i<3;i++){
+      const blade=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.9,0.1), mat(0xf5f8fa));
+      blade.position.set(0,2.1,0);
+      blade.rotation.z=(i/3)*Math.PI*2;
+      blade.translateY(0.45);
+      g.add(blade);
+    }
     g.position.set(x+0.5,elev,y+0.5); mesh=g;
   }
-  /* ---- Roads with markings / sidewalks / bridges ---- */
+  else if(t.type==='watertower'){
+    const g=new THREE.Group();
+    const tank=new THREE.Mesh(cylGeo(0.3,0.3,0.38,14), mat(0x3E8EC0,1,'flat'));
+    tank.position.y=1.6; g.add(tank);
+    const dome=new THREE.Mesh(sphGeo(0.3,12,8), mat(0x4a9ad0,1,'flat'));
+    dome.scale.y=0.55; dome.position.y=1.85; g.add(dome);
+    [[0.18,0.18],[-0.18,0.18],[0.18,-0.18],[-0.18,-0.18]].forEach(([lx,lz])=>{
+      const leg=new THREE.Mesh(cylGeo(0.035,0.045,1.45,6), mat(0x6a7078,1,'flat'));
+      leg.position.set(lx,0.72,lz); g.add(leg);
+    });
+    g.position.set(x+0.5,elev,y+0.5); mesh=g;
+  }
+  else if(t.type==='power'){
+    const g=new THREE.Group();
+    const hall=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.7,0.55), mat(0x8a7a50,1,'ind'));
+    hall.position.y=0.4; g.add(hall);
+    const stack=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.14,1.35,12), mat(0x6a6868));
+    stack.position.set(0.18,1.15,0.05); g.add(stack);
+    const stack2=stack.clone(); stack2.position.set(-0.12,1.0,0.12); stack2.scale.set(0.85,0.85,0.85); g.add(stack2);
+    g.position.set(x+0.5,elev,y+0.5); mesh=g;
+  }
+  /* ---- Roads: OpenTTD join bits + two-way markings matching car lanes ---- */
   else if(isRoad(t)){
     const g=new THREE.Group();
-    const w=t.type==='avenue'||t.type==='highway'||t.type==='hwybridge'?0.95:0.88;
-    const deckH=bridge?0.16:0.07;
+    const wide=t.type==='avenue'||t.type==='highway'||t.type==='hwybridge';
+    const laneW=wide?0.86:0.72; /* full two-way carriageway */
+    const overWater=bridge&&(t.terrain==='ravine'||t.terrain==='water');
+    const deckH=overWater?0.14:(elev>0.3?0.1:0.08);
     const col=tileColor(t);
-    const deck=new THREE.Mesh(new THREE.BoxGeometry(w,deckH,w), mat(col));
-    deck.position.y=deckH/2; g.add(deck);
-    if(t.type==='avenue'){
-      const sw=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.05,w*0.98), mat(0x9a9890));
-      const sw2=sw.clone();
-      sw.position.set(-w/2+0.06,0.06,0); sw2.position.set(w/2-0.06,0.06,0);
-      g.add(sw); g.add(sw2);
+    const asphalt=mat(col,1,'asphalt');
+    const curbMat=mat(0x9a9890,1,'curb');
+    const lineMat=mat(0xe8e4d0,1,'flat');
+    const yellowMat=mat(0xf0d050,1,'flat');
+    /* Bitmask: E=1 W=2 S=4 N=8 (OpenTTD-style) */
+    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    const bits=[1,2,4,8];
+    let mask=0;
+    const linked=[false,false,false,false];
+    for(let di=0;di<4;di++){
+      const nx=x+dirs[di][0], ny=y+dirs[di][1];
+      linked[di]=inBounds(nx,ny)&&isRoad(grid[nx][ny]);
+      if(linked[di]) mask|=bits[di];
     }
+    const linkCount=(linked[0]?1:0)+(linked[1]?1:0)+(linked[2]?1:0)+(linked[3]?1:0);
+    const straightEW=(mask===3);
+    const straightNS=(mask===12);
+    const isCurve=linkCount===2 && !straightEW && !straightNS;
+    const isTee=linkCount===3;
+    const isCross=linkCount===4;
+    const isEnd=linkCount<=1;
+    /* Continuous asphalt hub — always covers tile center so joins don't gap */
+    {
+      const hub=new THREE.Mesh(
+        (isCross||isTee||isCurve)?cylGeo(laneW*0.52, laneW*0.52, deckH, 12)
+          : boxGeo(laneW*0.95, deckH, laneW*0.95),
+        asphalt
+      );
+      hub.position.y=deckH/2; g.add(hub);
+    }
+    /* Arms to each neighbor (full carriageway width) + bridge ramps */
+    for(let di=0;di<4;di++){
+      if(!linked[di]) continue;
+      const nx=x+dirs[di][0], ny=y+dirs[di][1];
+      const nElev=roadDeckElev(nx,ny,grid[nx][ny]);
+      const dElev=nElev-elev;
+      const alongX=dirs[di][0]!==0;
+      const arm=new THREE.Mesh(
+        boxGeo(alongX?0.56:laneW, deckH, alongX?laneW:0.56),
+        asphalt
+      );
+      arm.position.set(dirs[di][0]*0.5, deckH/2+dElev*0.25, dirs[di][1]*0.5);
+      g.add(arm);
+      if(Math.abs(dElev)>0.06){
+        for(let s=1;s<=3;s++){
+          const tt=s/4;
+          const ramp=new THREE.Mesh(
+            boxGeo(alongX?0.24:laneW, deckH, alongX?laneW:0.24),
+            asphalt
+          );
+          ramp.position.set(
+            dirs[di][0]*(0.12+tt*0.38),
+            deckH/2+dElev*tt,
+            dirs[di][1]*(0.12+tt*0.38)
+          );
+          g.add(ramp);
+        }
+      }
+    }
+    /* Corner fillets so bends/T/X read as one road, not Minecraft cubes */
+    if(isCurve||isTee||isCross){
+      const corners=[[0,2],[0,3],[1,2],[1,3]];
+      const cornerPos=[[0.3,0.3],[0.3,-0.3],[-0.3,0.3],[-0.3,-0.3]];
+      for(let ci=0;ci<4;ci++){
+        if(!(linked[corners[ci][0]]&&linked[corners[ci][1]])) continue;
+        const fillet=new THREE.Mesh(cylGeo(laneW*0.48, laneW*0.48, deckH*0.98, 10), asphalt);
+        fillet.position.set(cornerPos[ci][0], deckH/2, cornerPos[ci][1]);
+        g.add(fillet);
+      }
+    }
+    /* Two-way center line — ONLY along travel axis on straights/ends (not junctions) */
+    const markY=deckH+0.012;
+    if(straightEW || (isEnd && (linked[0]||linked[1]))){
+      for(let k=-1;k<=1;k++){
+        const dash=new THREE.Mesh(boxGeo(0.2,0.01,0.04), (wide?yellowMat:lineMat));
+        dash.position.set(k*0.28, markY, 0); g.add(dash);
+      }
+    } else if(straightNS || (isEnd && (linked[2]||linked[3]))){
+      for(let k=-1;k<=1;k++){
+        const dash=new THREE.Mesh(boxGeo(0.04,0.01,0.2), (wide?yellowMat:lineMat));
+        dash.position.set(0, markY, k*0.28); g.add(dash);
+      }
+    } else if(isCurve){
+      /* Short chevron on curve — no full cross line cars would drive over */
+      const tick=new THREE.Mesh(boxGeo(0.08,0.01,0.08), lineMat);
+      tick.position.set(0, markY, 0); g.add(tick);
+    }
+    /* Highway edge hash — oriented to road, not a one-way strip */
     if(t.type==='highway'||t.type==='hwybridge'){
-      const mark=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.02,0.4), mat(0xe8c840));
-      mark.position.set(0,deckH+0.015,0); g.add(mark);
+      if(straightEW || (linked[0]||linked[1])){
+        [-1,1].forEach(side=>{
+          const edge=new THREE.Mesh(boxGeo(0.7,0.008,0.03), yellowMat);
+          edge.position.set(0, markY, side*(laneW*0.42)); g.add(edge);
+        });
+      } else {
+        [-1,1].forEach(side=>{
+          const edge=new THREE.Mesh(boxGeo(0.03,0.008,0.7), yellowMat);
+          edge.position.set(side*(laneW*0.42), markY, 0); g.add(edge);
+        });
+      }
     }
     if(t.type==='transit'||t.type==='transitbridge'){
-      const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.02,w*0.9), mat(0xc8102e));
-      stripe.position.y=deckH+0.015; g.add(stripe);
+      const stripe=new THREE.Mesh(
+        straightEW||(!(linked[2]||linked[3])&&(linked[0]||linked[1]))
+          ? boxGeo(0.7,0.01,0.1) : boxGeo(0.1,0.01,0.7),
+        mat(0xd0122d,1,'flat')
+      );
+      stripe.position.y=markY; g.add(stripe);
     }
-    if(bridge){
-      const pierH=elev;
-      const pier=new THREE.Mesh(new THREE.BoxGeometry(0.14,pierH,0.14), mat(0x5a5850));
-      pier.position.set(0,-pierH/2,0); g.add(pier);
-      const cap=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.2), mat(0x6a6860));
-      cap.position.y=0.02; g.add(cap);
+    /* Curbs on open edges only */
+    for(let di=0;di<4;di++){
+      if(linked[di]) continue;
+      const alongX=dirs[di][0]!==0;
+      const curb=new THREE.Mesh(cylGeo(0.03,0.03,laneW*0.9,6), curbMat);
+      if(alongX){
+        curb.rotation.z=Math.PI/2;
+        curb.position.set(dirs[di][0]*(laneW*0.5+0.02), deckH+0.02, 0);
+      } else {
+        curb.rotation.x=Math.PI/2;
+        curb.position.set(0, deckH+0.02, dirs[di][1]*(laneW*0.5+0.02));
+      }
+      g.add(curb);
+    }
+    if(overWater){
+      const pierH=Math.max(0.42, elev+0.12);
+      [[-0.22,-0.18],[0.22,0.18]].forEach(([px,pz])=>{
+        const pier=new THREE.Mesh(cylGeo(0.07,0.09,pierH,8), mat(0x5a5850,1,'flat'));
+        pier.position.set(px, -pierH/2+0.02, pz); g.add(pier);
+      });
+      const beam=new THREE.Mesh(boxGeo(0.7,0.07,0.18), mat(0x6a6860,1,'flat'));
+      beam.position.y=0.02; g.add(beam);
+      [-1,1].forEach(side=>{
+        const rail=new THREE.Mesh(boxGeo(laneW*0.95, 0.04, 0.03), mat(0x8a8880,1,'flat'));
+        rail.position.set(0, deckH+0.12, side*(laneW*0.5+0.02)); g.add(rail);
+        for(let p=0;p<3;p++){
+          const post=new THREE.Mesh(cylGeo(0.018,0.018,0.14,5), mat(0x7a7870,1,'flat'));
+          post.position.set((p-1)*0.22, deckH+0.07, side*(laneW*0.5+0.02)); g.add(post);
+        }
+      });
+    } else if(bridge&&elev>0.25){
+      [-1,1].forEach(side=>{
+        const rail=new THREE.Mesh(boxGeo(laneW*0.7, 0.03, 0.025), mat(0x8a8880,1,'flat'));
+        rail.position.set(0, deckH+0.1, side*(laneW*0.48)); g.add(rail);
+      });
     }
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
-  /* ---- Buildings / zones ---- */
+  /* ---- Buildings / zones — organic C:S-style silhouettes ---- */
   else {
     const g=new THREE.Group();
     const high=def&&def.density==='high';
-    const unbuilt=isZone(t)&&t.level===0;
-    const w=unbuilt?0.88:(isZone(t)?(high?0.68:0.62):0.72);
-    const col=tileColor(t);
-    const isTower=isZone(t)&&t.level>=3&&(high||t.landValue>65);
-    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,w), mat(col, unbuilt?0.45:1));
-    body.position.y=h/2; g.add(body);
+    const lv=isZone(t)?(t.level|0):0;
+    const unbuilt=isZone(t)&&lv===0;
+    const constructing=isZone(t)&&lv>0&&(t.buildPhase|0)>0;
+    const abandoned=isZone(t)&&t.abandoned&&lv>0;
+    const w=unbuilt?0.88:(isZone(t)?(high?(0.58+Math.min(lv,5)*0.035):(0.52+Math.min(lv,3)*0.045)):0.7);
+    let col=t.burning?0xc04018:(t.flooded?0x3a7090:tileColor(t));
+    if(abandoned) col=0x5a5850;
+    const isHouse=isZone(t)&&lv===1&&!high;
+    const isWalkup=isZone(t)&&lv===2&&!high;
+    const isLowMid=isZone(t)&&lv>=3&&!high;
+    const isCondo=isZone(t)&&high&&lv===1;
+    const isMidrise=isZone(t)&&((high&&lv===2)||(high&&lv===3&&t.landValue<65));
+    const isTower=isZone(t)&&((high&&lv>=4)||(high&&lv>=3&&t.landValue>=65)||(def&&def.zone==='off'&&lv>=3));
+    const roundVar=noise2(x*1.7,y*2.3);
+    let kind='flat';
+    if(unbuilt||constructing||abandoned) kind='flat';
+    else if(isHouse||isCondo) kind=isCondo?'brick':'house';
+    else if(isTower||(def&&def.zone==='off'&&lv>=2)||(high&&lv>=3)) kind='glass';
+    else if(def&&def.zone==='ind') kind='ind';
+    else if(def&&(def.zone==='res'||def.zone==='com')) kind='brick';
+    else if(isZone(t)&&lv>0) kind='brick';
 
-    if(isZone(t)&&t.level===1&&!high){
-      const roof=new THREE.Mesh(new THREE.ConeGeometry(w*0.72,0.22,4), mat(0x6a4030));
-      roof.position.y=h+0.1; roof.rotation.y=Math.PI/4; g.add(roof);
-    } else if(isZone(t)&&t.level===2&&!high){
-      const parapet=new THREE.Mesh(new THREE.BoxGeometry(w*1.02,0.08,w*1.02), mat(0x7a6050));
-      parapet.position.y=h+0.02; g.add(parapet);
+    if(constructing){
+      const scaffoldH=Math.max(0.4, h*0.7);
+      const frame=new THREE.Mesh(boxGeo(w*0.92,scaffoldH,w*0.92), mat(0xb8a070,0.55,'flat'));
+      frame.position.y=scaffoldH/2; g.add(frame);
+      for(let i=0;i<4;i++){
+        const pole=new THREE.Mesh(cylGeo(0.025,0.025,scaffoldH+0.12,5), mat(0x8a7860,1,'flat'));
+        const sx=(i%2?1:-1)*w*0.42, sz=(i<2?1:-1)*w*0.42;
+        pole.position.set(sx, (scaffoldH+0.12)/2, sz); g.add(pole);
+      }
+      if(lv>=3){
+        const crane=new THREE.Mesh(cylGeo(0.03,0.03,scaffoldH*0.9,5), mat(0xd0a040,1,'flat'));
+        crane.position.set(w*0.35, scaffoldH*0.55, -w*0.35); g.add(crane);
+      }
+      if(t.burning){
+        const flame=new THREE.Mesh(coneGeo(0.12,0.35,6), mat(0xff6020,0.85,'flat'));
+        flame.position.y=scaffoldH+0.25; g.add(flame);
+      }
+    } else if(t.type==='cityhall'){
+      const base=new THREE.Mesh(cylGeo(w*0.55,w*0.62,h*0.35,14), mat(col,1,'brick'));
+      base.position.y=h*0.175; g.add(base);
+      const tower=new THREE.Mesh(cylGeo(0.16,0.2,h*0.75,12), mat(0xa8b4c4,1,'glass'));
+      tower.position.y=h*0.35+h*0.375; g.add(tower);
+      const dome=new THREE.Mesh(sphGeo(0.28,12,8), mat(0xc8d0d8,1,'glass'));
+      dome.position.y=h*0.35+h*0.75+0.12; g.add(dome);
+      const twin=new THREE.Mesh(cylGeo(0.1,0.12,h*0.55,10), mat(0xa8b4c4,1,'glass'));
+      twin.position.set(-0.28,h*0.45,0); g.add(twin);
+      const twin2=twin.clone(); twin2.position.x=0.28; g.add(twin2);
+    } else if(t.type==='hospital'){
+      const body=new THREE.Mesh(boxGeo(w,h*0.85,w*0.85), mat(col,1,'brick'));
+      body.position.y=h*0.425; g.add(body);
+      const wing=new THREE.Mesh(cylGeo(w*0.28,w*0.28,h*0.5,12), mat(0xe8eef2,1,'flat'));
+      wing.position.set(w*0.35,h*0.3,0); g.add(wing);
+      const cross=new THREE.Mesh(boxGeo(0.28,0.08,0.08), mat(0xe02030,1,'flat'));
+      cross.position.set(0,h+0.08,0); g.add(cross);
+      const cross2=new THREE.Mesh(boxGeo(0.08,0.28,0.08), mat(0xe02030,1,'flat'));
+      cross2.position.set(0,h+0.08,0); g.add(cross2);
+    } else if(t.type==='stadium'){
+      const bowl=new THREE.Mesh(cylGeo(w*0.7,w*0.55,h*0.55,16), mat(col,1,'flat'));
+      bowl.position.y=h*0.28; g.add(bowl);
+      const ring=new THREE.Mesh(torGeo(w*0.58,0.06,6,16), mat(0xd0d4d8,1,'flat'));
+      ring.rotation.x=Math.PI/2; ring.position.y=h*0.55; g.add(ring);
+    } else if(t.type==='metro'||t.type==='busdepot'||t.type==='trainpass'){
+      const pad=new THREE.Mesh(cylGeo(w*0.55,w*0.55,0.08,14), mat(0x4a5058,1,'asphalt'));
+      pad.position.y=0.04; g.add(pad);
+      const hall=new THREE.Mesh(cylGeo(w*0.4,w*0.42,h*0.7,12), mat(col,1,'glass'));
+      hall.position.y=h*0.4; g.add(hall);
+      const roof=new THREE.Mesh(sphGeo(w*0.42,12,6), mat(0xd0122d,1,'flat'));
+      roof.scale.y=0.45; roof.position.y=h*0.75; g.add(roof);
+    } else if(def&&def.zone==='ind'&&lv>0){
+      const shed=new THREE.Mesh(boxGeo(w*0.7,h*0.55,w*0.55), mat(col,1,'ind'));
+      shed.position.set(-w*0.12,h*0.275,0); g.add(shed);
+      const silo=new THREE.Mesh(cylGeo(w*0.22,w*0.24,h*0.85+lv*0.08,10), mat(0x8a8070,1,'flat'));
+      silo.position.set(w*0.28, (h*0.85+lv*0.08)/2, w*0.1); g.add(silo);
+      const cap=new THREE.Mesh(sphGeo(w*0.22,8,6), mat(0x6a6860,1,'flat'));
+      cap.scale.y=0.55; cap.position.set(w*0.28, h*0.85+lv*0.08, w*0.1); g.add(cap);
+      if(lv>=2){
+        const stack=new THREE.Mesh(cylGeo(0.06,0.08,0.55+lv*0.2,8), mat(0x6a6860,1,'flat'));
+        stack.position.set(-w*0.15,h*0.55,w*0.2); g.add(stack);
+      }
     } else if(isTower){
-      const crown=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,0.15,w*0.5), mat(0xd8dce0));
+      /* Cylindrical / chamfered glass tower + round podium */
+      const podH=Math.min(0.5, h*0.18);
+      const podium=new THREE.Mesh(cylGeo(w*0.72, w*0.72, podH, 14), mat(col,1,'brick'));
+      podium.position.y=podH/2; g.add(podium);
+      const shaftR=w*(roundVar>0.45?0.42:0.38);
+      const shaft=new THREE.Mesh(cylGeo(shaftR*0.92, shaftR, h-podH*0.5, 12), mat(col, unbuilt?0.4:(abandoned?0.7:1), kind));
+      shaft.position.y=podH*0.6+(h-podH*0.5)/2; g.add(shaft);
+      if(roundVar>0.55){
+        const wing=new THREE.Mesh(boxGeo(w*0.55,h*0.55,w*0.35), mat(col,1,kind));
+        wing.position.set(w*0.28, podH+h*0.3, 0); g.add(wing);
+      }
+      const crown=new THREE.Mesh(cylGeo(shaftR*0.55, shaftR*0.7, 0.18+lv*0.03, 10), mat(0xd8dce2,1,'glass'));
       crown.position.y=h+0.08; g.add(crown);
+      if(lv>=4){
+        const spire=new THREE.Mesh(cylGeo(0.03,0.05,0.28+lv*0.06,6), mat(0xc8d0d8,1,'flat'));
+        spire.position.y=h+0.35; g.add(spire);
+      }
+    } else if(isHouse){
+      const body=new THREE.Mesh(boxGeo(w*0.85,h,w*0.7), mat(col, abandoned?0.7:1, kind));
+      body.position.y=h/2; g.add(body);
+      const bay=new THREE.Mesh(cylGeo(w*0.18,w*0.18,h*0.55,8), mat(col,1,kind));
+      bay.position.set(w*0.32,h*0.3,0); g.add(bay);
+      const roof=new THREE.Mesh(coneGeo(w*0.72,0.3,4), mat(abandoned?0x4a4038:0x5a3828,1,'flat'));
+      roof.position.y=h+0.12; roof.rotation.y=Math.PI/4; g.add(roof);
+      const chim=new THREE.Mesh(cylGeo(0.04,0.045,0.2,6), mat(0x7a6050,1,'flat'));
+      chim.position.set(w*0.15,h+0.22,0); g.add(chim);
+    } else if(isCondo||isWalkup){
+      const body=new THREE.Mesh(boxGeo(w,h,w*0.9), mat(col, abandoned?0.7:1, kind));
+      body.position.y=h/2; g.add(body);
+      const corner=new THREE.Mesh(cylGeo(w*0.12,w*0.12,h,8), mat(col,1,kind));
+      corner.position.set(w*0.42,h/2,w*0.38); g.add(corner);
+      const parapet=new THREE.Mesh(cylGeo(w*0.52,w*0.52,0.06,12), mat(0x6a6058,1,'flat'));
+      parapet.position.y=h+0.02; g.add(parapet);
+      if(def&&def.zone==='com'){
+        const awning=new THREE.Mesh(boxGeo(w*0.85,0.04,0.12), mat(0x3a5060,1,'flat'));
+        awning.position.set(0,0.42,w/2+0.04); g.add(awning);
+      }
+    } else if(isLowMid||isMidrise){
+      const body=new THREE.Mesh(boxGeo(w*0.92,h,w*0.92), mat(col, abandoned?0.7:1, kind));
+      body.position.y=h/2; g.add(body);
+      /* Rounded corner columns */
+      [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([sx,sz])=>{
+        const c=new THREE.Mesh(cylGeo(0.06,0.06,h,6), mat(col,1,kind));
+        c.position.set(sx*w*0.42, h/2, sz*w*0.42); g.add(c);
+      });
+      const parapet=new THREE.Mesh(cylGeo(w*0.55,w*0.55,0.07,12), mat(0x6a5850,1,'flat'));
+      parapet.position.y=h+0.02; g.add(parapet);
+      if(def&&def.zone==='com'){
+        const awning=new THREE.Mesh(boxGeo(w*0.85,0.04,0.12), mat(0x3a5060,1,'flat'));
+        awning.position.set(0,0.55,w/2+0.04); g.add(awning);
+      }
+    } else if(unbuilt){
+      const pad=new THREE.Mesh(cylGeo(0.42,0.42,0.04,12), mat(def&&def.color?parseInt(def.color.replace('#',''),16):0x888888,0.4,'flat'));
+      pad.position.y=0.03; g.add(pad);
+      const stake=new THREE.Mesh(cylGeo(0.02,0.02,0.35,5), mat(0xc8b060,1,'flat'));
+      stake.position.set(0.28,0.2,0.28); g.add(stake);
+    } else {
+      /* Generic civic / service — soft box with round accents */
+      const body=new THREE.Mesh(boxGeo(w,h,w), mat(col, abandoned?0.7:1, kind));
+      body.position.y=h/2; g.add(body);
+      const cap=new THREE.Mesh(cylGeo(w*0.35,w*0.4,0.12,10), mat(0x8a9098,1,'flat'));
+      cap.position.y=h+0.04; g.add(cap);
     }
 
-    if(unbuilt){
-      body.scale.set(1,0.35,1); body.position.y=0.06;
+    if(abandoned&&lv>0&&!constructing){
+      const board=new THREE.Mesh(boxGeo(w*0.35,0.22,0.04), mat(0x3a3028,1,'flat'));
+      board.position.set(0,0.45,w/2+0.02); g.add(board);
     }
-
-    if(t.type==='cityhall'){
-      const twin=new THREE.Mesh(new THREE.BoxGeometry(0.25,1.4,0.25), mat(0x90a0b8));
-      twin.position.set(-0.2,1.0,0); g.add(twin);
-      const twin2=twin.clone(); twin2.position.x=0.2; g.add(twin2);
+    if(t.burning&&!constructing){
+      const flame=new THREE.Mesh(coneGeo(0.14,0.4,6), mat(0xff5020,0.9,'flat'));
+      flame.position.y=h+0.35; g.add(flame);
+    }
+    if(t.flooded){
+      const puddle=new THREE.Mesh(cylGeo(w*0.55,w*0.55,0.05,12), mat(0x2a7098,0.55,'flat'));
+      puddle.position.y=0.04; g.add(puddle);
     }
 
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
@@ -1477,10 +2830,23 @@ function applyTool(pos){
   if(!def||selectedTool==='query') return;
 
   if(selectedTool==='bulldoze'){
-    if(tile.type!=='empty'){
-      if(money<def.cost){flashFunds();return}
-      money-=def.cost; tile.type='empty'; tile.level=0; tile.parkId=null; tile.parkName=null; tile.spec=null; tile.pollution=0;
+    if(tile.type!=='empty' || tile.burning || tile.flooded){
+      const wasRoad=isRoad(tile);
+      if(tile.type!=='empty'){
+        if(money<def.cost){flashFunds();return}
+        money-=def.cost;
+      }
+      tile.type='empty'; tile.level=0; tile.parkId=null; tile.parkName=null; tile.spec=null; tile.pollution=0;
+      tile.buildPhase=0; tile.burning=false; tile.flooded=false; tile.zoneAge=0; tile.abandoned=false;
       upsertStructure(x,y);
+      if(wasRoad){
+        for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
+          if(!dx&&!dy) continue;
+          const a=x+dx, b=y+dy;
+          if(inBounds(a,b)&&isRoad(grid[a][b])) upsertStructure(a,b);
+        }
+        refreshRoadList();
+      }
       utilDirty=true; infDirty=true;
     }
     return;
@@ -1497,7 +2863,13 @@ function applyTool(pos){
     }
   } else {
     if(tile.terrain!=='land') return;
-    if(def.zone||def.park||def.power||def.water||def.svc||def.waste||def.jobs||['stadium','airport','cityhall','cntower','postoffice','metro','busdepot','trainpass','traincargo','harbor','ferry','monorail','drain','tradeschool','cemetery','naturereserve','zoo','amusement'].includes(def.id)){
+    if(def.zone){
+      if(tile.type!=='empty') return;
+      if(!hasRoadAccess(x,y)){
+        showToast('Zones must be placed <b>beside a road</b>.', 'warn', 2400);
+        return;
+      }
+    } else if(def.park||def.power||def.water||def.svc||def.waste||def.jobs||['stadium','airport','cityhall','cntower','postoffice','metro','busdepot','trainpass','traincargo','harbor','ferry','monorail','drain','tradeschool','cemetery','naturereserve','zoo','amusement'].includes(def.id)){
       if(tile.type!=='empty') return;
     } else if(def.road){
       if(tile.type!=='empty'&&!isRoad(tile)) return;
@@ -1508,9 +2880,32 @@ function applyTool(pos){
   const cost=Number(def.cost)||0;
   if(money<cost){flashFunds();return}
   money-=cost;
-  tile.type=def.id; tile.level=0;
+  tile.type=def.id; tile.level=0; tile.buildPhase=0; tile.zoneAge=0; tile.abandoned=false;
   tile.parkId=def.parkId||null; tile.parkName=def.parkName||null; tile.spec=def.spec||null;
+  if(def.svc==='fire'){
+    /* Placing a fire hall helps put out nearby flames immediately */
+    for(let dx=-(def.radius||9);dx<=(def.radius||9);dx++)for(let dy=-(def.radius||9);dy<=(def.radius||9);dy++){
+      if(dx*dx+dy*dy>(def.radius||9)*(def.radius||9)) continue;
+      const nx=x+dx, ny=y+dy; if(!inBounds(nx,ny)) continue;
+      if(grid[nx][ny].burning){ grid[nx][ny].burning=false; upsertStructure(nx,ny); }
+    }
+  }
+  if(def.id==='drain'||def.treat){
+    for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++){
+      const nx=x+dx, ny=y+dy; if(!inBounds(nx,ny)) continue;
+      if(grid[nx][ny].flooded){ grid[nx][ny].flooded=false; upsertStructure(nx,ny); }
+    }
+  }
   upsertStructure(x,y);
+  /* Refresh nearby road/bridge meshes so ramps + fillets update (2-tile radius) */
+  if(def.road||def.bridge){
+    for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
+      if(!dx&&!dy) continue;
+      const a=x+dx, b=y+dy;
+      if(inBounds(a,b)&&isRoad(grid[a][b])) upsertStructure(a,b);
+    }
+    refreshRoadList();
+  }
   utilDirty=true; infDirty=true;
   advanceTutorial(def.id);
   checkMilestones(def.id);
@@ -1521,49 +2916,52 @@ function flashFunds(){insufficientFlash=16}
 
 canvas.addEventListener('pointerdown',e=>{
   if(orbit.pointerId!=null && orbit.pointerId!==e.pointerId) return;
+  _ptrClientX=e.clientX; _ptrClientY=e.clientY;
   if(e.button===0){
-    const panMod=e.shiftKey||camKeys.space||camKeys.shift;
-    if(panMod){
-      orbit.panning=true; orbit.paintingActive=false; painting=false; orbit.rotating=false;
-      orbit.pointerId=e.pointerId;
-      orbit.lastX=e.clientX; orbit.lastY=e.clientY;
-      canvas.setPointerCapture(e.pointerId);
-    } else {
-      /* Left = paint only — never orbit/pan */
-      painting=true; orbit.paintingActive=true;
-      orbit.rotating=false; orbit.panning=false;
-      orbit.pointerId=e.pointerId;
-      const p=pickTile(e.clientX,e.clientY); hoverTile=p; applyTool(p);
-      canvas.setPointerCapture(e.pointerId);
-    }
-  } else if(e.button===2){
-    if(orbit.paintingActive) return; /* don't steal paint into orbit */
+    /* C:S — left click builds / paints */
+    painting=true; orbit.paintingActive=true;
+    orbit.rotating=false; orbit.panning=false;
+    orbit.pointerId=e.pointerId;
+    clearEdgeScroll();
+    const p=pickTile(e.clientX,e.clientY); hoverTile=p; applyTool(p);
+    canvas.setPointerCapture(e.pointerId);
+  } else if(e.button===1){
+    /* C:S — middle mouse rotates + tilts */
+    e.preventDefault();
+    if(orbit.paintingActive) return;
     orbit.rotating=true; orbit.panning=false; painting=false; orbit.paintingActive=false;
     orbit.pointerId=e.pointerId;
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    clearEdgeScroll();
     canvas.setPointerCapture(e.pointerId);
-  } else if(e.button===1){
+  } else if(e.button===2){
+    /* Hold RMB + drag = pan; short click cancels to Inspect */
     e.preventDefault();
-    if(orbit.paintingActive) return;
-    orbit.panning=true; orbit.rotating=false; painting=false; orbit.paintingActive=false;
+    if(orbit.paintingActive){ painting=false; orbit.paintingActive=false; }
+    orbit.panning=true; orbit.rotating=false; painting=false;
     orbit.pointerId=e.pointerId;
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    orbit.rmbDrag=0;
+    clearEdgeScroll();
     canvas.setPointerCapture(e.pointerId);
   }
 });
 let _inspectThrottle=0;
 canvas.addEventListener('pointermove',e=>{
+  _ptrClientX=e.clientX; _ptrClientY=e.clientY;
   if(orbit.pointerId!=null && e.pointerId!==orbit.pointerId) return;
   if(orbit.rotating){
     const dx=e.clientX-orbit.lastX, dy=e.clientY-orbit.lastY;
-    rotateOrbit(dx,dy);
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    if(dx||dy) rotateOrbit(dx,dy);
     return;
   }
   if(orbit.panning){
     const dx=e.clientX-orbit.lastX, dy=e.clientY-orbit.lastY;
-    panOrbit(dx,dy);
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    orbit.rmbDrag+=(Math.abs(dx)+Math.abs(dy));
+    /* RMB pan — vertical invert lives in panOrbit (_panFwd sign); pass raw deltas */
+    if(dx||dy) panOrbit(dx, dy);
     return;
   }
   const p=pickTile(e.clientX,e.clientY); hoverTile=p;
@@ -1575,20 +2973,41 @@ canvas.addEventListener('pointermove',e=>{
 });
 function endPointer(e){
   if(orbit.pointerId!=null && e.pointerId!==orbit.pointerId) return;
+  const wasRmb=orbit.panning;
+  const drag=orbit.rmbDrag||0;
   painting=false; orbit.paintingActive=false;
   orbit.rotating=false; orbit.panning=false;
-  orbit.pointerId=null;
+  orbit.pointerId=null; orbit.rmbDrag=0;
   try{canvas.releasePointerCapture(e.pointerId)}catch(_){}
+  /* Short RMB click (no drag) → cancel tool / Inspect */
+  if(wasRmb && drag<8 && (e.button===2 || (e.buttons&4)===0)){
+    if(selectedTool!=='query'){
+      selectTool('query');
+      showToast('Inspect mode — hold RMB and drag to pan.', '', 1800);
+    }
+  }
 }
 canvas.addEventListener('pointerup',endPointer);
 canvas.addEventListener('pointercancel',endPointer);
 canvas.addEventListener('lostpointercapture',()=>{
   painting=false; orbit.paintingActive=false; orbit.rotating=false; orbit.panning=false; orbit.pointerId=null;
 });
+/* Edge scroll only via wrap — avoids double-fire from canvas bubble + binary flicker */
+wrap.addEventListener('pointerenter',()=>{ _ptrOverWrap=true; });
+wrap.addEventListener('pointerleave',()=>{
+  _ptrOverWrap=false;
+  clearEdgeScroll();
+});
+wrap.addEventListener('pointermove',e=>{
+  _ptrClientX=e.clientX; _ptrClientY=e.clientY;
+  _ptrOverWrap=true;
+  if(!orbit.rotating && !orbit.paintingActive && !orbit.panning) updateEdgeScroll(e.clientX, e.clientY);
+  else clearEdgeScroll();
+});
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   if(orbit.paintingActive) return;
-  zoomOrbit(e.deltaY);
+  zoomOrbit(e.deltaY, e.clientX, e.clientY);
 },{passive:false});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('auxclick',e=>{if(e.button===1) e.preventDefault()});
@@ -1617,7 +3036,6 @@ canvas.addEventListener('auxclick',e=>{if(e.button===1) e.preventDefault()});
     btn.addEventListener('pointerleave',end);
     btn.addEventListener('pointercancel',end);
   });
-  /* Hold-to-repeat orbit/zoom */
   setInterval(()=>{
     if(held.orbitL) rotateOrbit(10,0);
     if(held.orbitR) rotateOrbit(-10,0);
@@ -1630,28 +3048,50 @@ window.addEventListener('keydown',e=>{
   const typing=/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||'');
   const k=e.key.toLowerCase();
   if(!typing){
-    if(e.code==='Space'){camKeys.space=true; e.preventDefault()}
     if(e.key==='Shift') camKeys.shift=true;
     if(k==='w') camKeys.w=true; if(k==='a') camKeys.a=true; if(k==='s') camKeys.s=true; if(k==='d') camKeys.d=true;
+    if(k==='q') camKeys.q=true; if(k==='e') camKeys.e=true;
+    if(k==='z'&&!e.ctrlKey&&!e.metaKey) camKeys.z=true;
+    if(k==='x') camKeys.x=true;
+    if(e.code==='Home') camKeys.home=true;
+    if(e.code==='End') camKeys.end=true;
     if(e.code==='ArrowUp') camKeys.up=true; if(e.code==='ArrowDown') camKeys.down=true;
     if(e.code==='ArrowLeft') camKeys.left=true; if(e.code==='ArrowRight') camKeys.right=true;
+    if(e.code==='Space'){ e.preventDefault(); setSpeed(speed===0?1:0); }
+    if(e.code==='Escape'){ selectTool('query'); }
+    if(k==='b') selectTool('bulldoze');
   }
-  const map={r:'road',z:'rzone',c:'czone',i:'izone',x:'bulldoze',t:'transit',h:'highway',q:'query',b:'bridge'};
-  if(!typing&&map[k]&&!camKeys.space) selectTool(map[k]);
-  if(e.code==='Digit1') setSpeed(0); if(e.code==='Digit2') setSpeed(1); if(e.code==='Digit3') setSpeed(2);
+  /* C:S zoning hotkeys + a few extras */
+  if(!typing){
+    if(e.code==='Digit4'){ selectCat('zones'); selectTool('rzone'); }
+    if(e.code==='Digit5'){ selectCat('zones'); selectTool('rzone_high'); }
+    if(e.code==='Digit6'){ selectCat('zones'); selectTool('czone'); }
+    if(e.code==='Digit7'){ selectCat('zones'); selectTool('czone_high'); }
+    if(e.code==='Digit8'){ selectCat('zones'); selectTool('izone'); }
+    if(e.code==='Digit9'){ selectCat('zones'); selectTool('ozone'); }
+    if(e.code==='Digit0') selectTool('bulldoze');
+    if(e.code==='Digit1') setSpeed(0);
+    if(e.code==='Digit2') setSpeed(1);
+    if(e.code==='Digit3') setSpeed(2);
+  }
 });
 window.addEventListener('keyup',e=>{
   const k=e.key.toLowerCase();
-  if(e.code==='Space') camKeys.space=false;
   if(e.key==='Shift') camKeys.shift=false;
   if(k==='w') camKeys.w=false; if(k==='a') camKeys.a=false; if(k==='s') camKeys.s=false; if(k==='d') camKeys.d=false;
+  if(k==='q') camKeys.q=false; if(k==='e') camKeys.e=false;
+  if(k==='z') camKeys.z=false; if(k==='x') camKeys.x=false;
+  if(e.code==='Home') camKeys.home=false; if(e.code==='End') camKeys.end=false;
   if(e.code==='ArrowUp') camKeys.up=false; if(e.code==='ArrowDown') camKeys.down=false;
   if(e.code==='ArrowLeft') camKeys.left=false; if(e.code==='ArrowRight') camKeys.right=false;
 });
 window.addEventListener('blur',()=>{
   camKeys.w=camKeys.a=camKeys.s=camKeys.d=false;
   camKeys.up=camKeys.down=camKeys.left=camKeys.right=false;
-  camKeys.shift=camKeys.space=false;
+  camKeys.q=camKeys.e=camKeys.z=camKeys.x=camKeys.home=camKeys.end=false;
+  camKeys.shift=false;
+  clearEdgeScroll();
+  _ptrOverWrap=false;
 });
 
 function updateHover(pos){
@@ -1677,14 +3117,43 @@ function stampInf(arr, x,y,r, val){
   }
 }
 function refreshInfluence(){
-  eduInf.fill(0); parkInf.fill(0);
+  eduInf.fill(0); parkInf.fill(0); fireInf.fill(0); policeInf.fill(0); healthInf.fill(0);
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const def=toolById[grid[x][y].type];
     if(!def) continue;
     if(def.svc==='edu') stampInf(eduInf,x,y,def.radius||8,1);
+    if(def.svc==='police') stampInf(policeInf,x,y,def.radius||9, fundPolice);
+    if(def.svc==='fire') stampInf(fireInf,x,y,def.radius||9, fundFire);
+    if(def.svc==='health') stampInf(healthInf,x,y,def.radius||8,1);
     if(def.park) stampInf(parkInf,x,y,def.radius||5,1);
   }
   infDirty=false;
+}
+
+/* Zone tool hard cap — R/C Low never becomes towers; High can */
+function zoneToolMaxLevel(def){
+  if(!def) return 1;
+  if(def.density==='high') return def.zone==='res'||def.zone==='off'?5:4;
+  if(def.spec==='farm'||def.spec==='forest') return 2;
+  if(def.spec==='oil'||def.spec==='ore') return 3;
+  return 3; /* R Low / C Low / Industrial */
+}
+
+/* C:S-style desirability for upgrades (0..1+) */
+function zoneDesirability(x,y,t,def){
+  const i=x*ROWS+y;
+  let s=0.35+(t.landValue/100)*0.35+(happiness/100)*0.12;
+  if(parkInf[i]>0) s+=0.12;
+  if(eduInf[i]>0) s+=0.1;
+  if(policeInf[i]>0) s+=0.08;
+  if(fireInf[i]>0) s+=0.06;
+  if(healthInf[i]>0) s+=0.08;
+  if(nearType(x,y,'transit',3)||nearType(x,y,'metro',4)) s+=0.1;
+  if(t.pollution>40 && def.zone==='res') s-=0.2;
+  if((t.crime||0)>50 && def.zone==='res') s-=0.15;
+  if((t.zoneAge||0)>12) s+=0.06; /* established lots densify */
+  if((t.zoneAge||0)>30) s+=0.06;
+  return clamp(s, 0.05, 1.35);
 }
 
 function recomputeUtilities(){
@@ -1779,64 +3248,139 @@ function tick(){
   const waterRatio=waterDemand>0?Math.min(1,waterCap/waterDemand):1;
   const wasteRatio=wasteDemand>0?Math.min(1,wasteCap/Math.max(wasteDemand,1)):1;
   avgPollution=pollN?pollSum/pollN:0;
-  unemployment=population<15?0:clamp((1-jobs/Math.max(population,1))*100,0,100);
+  unemployment=population<15?0:clamp((1-jobs/Math.max(population*0.38,1))*100,0,100);
 
   checkMilestones(null);
 
-  const jobRatio=jobs/Math.max(population,1), popRatio=population/Math.max(jobs,1);
-  demand.r=clamp(28+(jobRatio-0.8)*50-taxRates.res*160+(happiness-50)*0.4, -100,100);
-  demand.c=clamp(12+(popRatio-0.7)*45-taxRates.com*150, -100,100);
-  demand.i=clamp(16+(popRatio-0.6)*35-taxRates.ind*140, -100,100);
-  demand.o=clamp(10+(popRatio-0.75)*40-taxRates.com*120, -100,100);
-  if(population===0&&jobs===0){demand.r=40;demand.c=22;demand.i=25;demand.o=15}
+  /* Job tallies by sector for RCI valves */
+  let jobsBy={com:0,ind:0,off:0,res:0};
+  for(let zi=0;zi<zones.length;zi+=2){
+    const t=grid[zones[zi]][zones[zi+1]]; const def=toolById[t.type];
+    if(!t.level||!def) continue;
+    if(def.zone==='com') jobsBy.com+=t.level*(def.density==='high'?20:12);
+    else if(def.zone==='ind') jobsBy.ind+=t.level*14;
+    else if(def.zone==='off') jobsBy.off+=t.level*22;
+  }
+  if(day%2===0) updateTraffic();
+  if(day%3===0) updateCrimeMap(svc);
+  updateRCIValves(jobsBy);
 
   for(let zi=0;zi<zones.length;zi+=2){
     const x=zones[zi], y=zones[zi+1];
     const t=grid[x][y]; const def=toolById[t.type];
+    if(!def) continue;
     const road=hasRoadAccess(x,y);
-    const powered=t.powered&&powerRatio>0.4;
-    const watered=t.watered&&waterRatio>0.4;
+    const powered=t.powered&&powerRatio>0.35;
+    const watered=t.watered&&waterRatio>0.35;
     let d=demand.r; if(def.zone==='com') d=demand.c; else if(def.zone==='ind') d=demand.i; else if(def.zone==='off') d=demand.o;
+    const idx=x*ROWS+y;
+    const desir=zoneDesirability(x,y,t,def);
 
+    /* Soft cap from services/land value, hard cap from zone density tool */
+    const toolMax=zoneToolMaxLevel(def);
     let cap=1;
-    if(def.density==='high'){ cap=def.zone==='res'?5:4; if(t.landValue>50) cap=Math.min(5,cap+1) }
-    else { if(t.landValue>45) cap=2; if(t.landValue>65) cap=3; if(t.landValue>80) cap=4 }
-    if(eduInf[x*ROWS+y]>0) cap=Math.min(5,cap+1);
-    if(t.pollution>55&&def.zone==='res') cap=Math.min(cap,2);
+    if(def.density==='high'){
+      cap=2;
+      if(t.landValue>45||desir>0.55) cap=3;
+      if(t.landValue>60||desir>0.75) cap=4;
+      if(t.landValue>72&&desir>0.85&&powered&&watered) cap=toolMax;
+    } else {
+      cap=1;
+      if(t.landValue>38||desir>0.5) cap=2;
+      if(t.landValue>58&&desir>0.7&&powered&&watered) cap=3;
+    }
+    if(eduInf[idx]>0) cap=Math.min(toolMax, cap+1);
+    if(parkInf[idx]>0&&def.zone==='res') cap=Math.min(toolMax, Math.max(cap, 2));
+    if(t.pollution>55&&def.zone==='res') cap=Math.min(cap, 2);
+    if((t.tripFail||0)>3) cap=Math.min(cap, Math.max(1,cap-1));
+    if((t.crime||0)>60&&def.zone==='res') cap=Math.min(cap, 2);
+    if(!powered||!watered) cap=Math.min(cap, Math.max(1, t.level||1)); /* no util → freeze upgrades */
+    cap=Math.min(cap, toolMax);
     t.densityCap=cap;
 
     const prevL=t.level;
-    if(road && t.level===0 && d>-10){
-      const early=population<80?1.85:1;
-      const chance=(0.18+(d/100)*0.22)*early*(gameSettings.growthMult||1);
-      if(Math.random()<chance) t.level=1;
-    } else if(road && powered && watered && t.level>0 && t.level<cap && d>0){
-      let chance=(0.06+(d/100)*0.12+(t.landValue/100)*0.04)*(gameSettings.growthMult||1);
-      if(population<120) chance*=1.45;
-      if(parkInf[x*ROWS+y]>0&&def.zone==='res') chance*=1.25;
-      if(Math.random()<chance) t.level++;
-    } else if(t.level>0){
-      let decay=0;
-      if(!road) decay+=0.04;
-      if(t.level>=2&&(!powered||!watered)) decay+=0.025;
-      if(d<-40) decay+=0.02;
-      if(Math.random()<decay) t.level--;
+    const accessOk=(t.tripFail||0)<4;
+    if(t.level>0) t.zoneAge=(t.zoneAge||0)+1;
+
+    /* Stage 0→1: construction start — road + demand (utilities optional for first shack) */
+    if(road && accessOk && t.level===0 && d>-20 && !t.burning && !t.flooded){
+      const early=population<100?1.35:1;
+      let chance=(0.5+(d/100)*0.3+desir*0.12)*early*(gameSettings.growthMult||1);
+      if(population<30) chance=Math.min(0.96, chance*1.2);
+      if(Math.random()<chance){ t.level=1; t.zoneAge=0; t.abandoned=false; }
     }
-    if(t.level!==prevL) grew.push([x,y]);
+    /* Upgrades L→L+1: need utilities, demand, desirability; scaffold blocks re-roll */
+    else if(road && powered && watered && accessOk && t.level>0 && t.level<cap && d>8 && !t.burning && !t.flooded && !(t.buildPhase>0) && !t.abandoned){
+      const needAge=t.level===1?6:t.level===2?10:t.level===3?14:18; /* settle before densify */
+      if((t.zoneAge||0)>=needAge){
+        let chance=(0.08+(d/100)*0.16+desir*0.14+(t.landValue/100)*0.05)*(gameSettings.growthMult||1);
+        if(population<150) chance*=1.35;
+        if(parkInf[idx]>0&&def.zone==='res') chance*=1.2;
+        if(policeInf[idx]>0) chance*=1.1;
+        if(tripStats.rate<0.45) chance*=0.65;
+        if(happiness<35) chance*=0.55;
+        if(t.level>=3 && def.density!=='high') chance*=0.35; /* low zones rarely hit L3 */
+        if(Math.random()<chance){ t.level++; t.zoneAge=0; }
+      }
+    }
+    /* Downgrade / abandon when services fail */
+    else if(t.level>0){
+      let decay=0;
+      if(!road) decay+=0.12;
+      if((t.tripFail||0)>5) decay+=0.06;
+      if(!powered||!watered) decay+=0.045+(t.level>=3?0.03:0);
+      if(d<-35) decay+=0.03;
+      if((t.crime||0)>70&&def.zone==='res') decay+=0.025;
+      if(fireInf[idx]<0.01 && t.level>=3 && population>80) decay+=0.01; /* highrises want fire cover */
+      if(t.burning) decay+=0.1;
+      if(t.flooded) decay+=0.07;
+      if(happiness<25 && t.level>=2) decay+=0.02;
+      if(Math.random()<decay){
+        t.level--;
+        t.zoneAge=0;
+        if(t.level<=0){ t.abandoned=true; t.level=0; }
+        else if(!powered||!watered||!road) t.abandoned=true;
+      } else if(powered && watered && road && d>-10 && (t.crime||0)<55){
+        t.abandoned=false;
+      }
+    }
+
+    if(t.level>prevL){
+      t.buildPhase=3+(t.level>=3?2:0)+(t.level>=5?1:0); /* scaffold then new look */
+      t.abandoned=false;
+      grew.push([x,y]);
+    } else if(t.level<prevL){
+      t.buildPhase=0; grew.push([x,y]);
+    } else if((t.buildPhase|0)>0){
+      t.buildPhase--;
+      if(t.buildPhase===0) grew.push([x,y]);
+    }
   }
   for(const [x,y] of grew) upsertStructure(x,y);
 
+  if(day%4===0 || !roadList.length) refreshRoadList();
+  walkSpots=[];
+  for(let zi=0;zi<zones.length;zi+=2){
+    const x=zones[zi], y=zones[zi+1];
+    const t=grid[x][y];
+    if(t.level>0){
+      walkSpots.push(x+0.3+Math.random()*0.4, y+0.3+Math.random()*0.4);
+      if(hasRoadAccess(x,y)) walkSpots.push(x+0.5, y+0.12);
+    }
+  }
+
   if(day%40===0) refreshLandValue();
-  const svcScore=(svc.police*40+svc.fire*35+(svc.health||0)*50+(svc.edu||0)*40+svc.park*22)/Math.max(population+jobs,50);
+  const svcScore=(svc.police*40*fundPolice+svc.fire*35*fundFire+(svc.health||0)*50+(svc.edu||0)*40+svc.park*22)/Math.max(population+jobs,50);
   const taxB=(taxRates.res+taxRates.com+taxRates.ind)/3*100;
-  const target=clamp(40+clamp(svcScore,0,35)+(powerRatio-1)*20+(waterRatio-1)*15+(wasteRatio-1)*12-taxB*0.5-unemployment*0.2-avgPollution*0.18,0,100);
+  const tripBonus=(tripStats.rate-0.5)*18;
+  let target=clamp(40+clamp(svcScore,0,35)+(powerRatio-1)*20+(waterRatio-1)*15+(wasteRatio-1)*12-taxB*0.5-unemployment*0.25-avgPollution*0.18-avgCrime*0.15+tripBonus,0,100);
+  if(day<=blizzardUntil) target=Math.max(8, target-14);
+  if(burningTiles>0) target=Math.max(8, target-Math.min(18, burningTiles*2));
+  if(floodedTiles>0) target=Math.max(8, target-Math.min(12, floodedTiles*1.5));
   happiness+=(target-happiness)*0.06;
 
   if(day%30===0) runBudget(svc,roads);
-  if(gameSettings.events!==false){
-    const ec=gameSettings.eventChance||1;
-    if(Math.random()<0.0003*ec&&population>180&&day>strikeUntil+80){strikeUntil=day+14;happiness-=6;log('TTC strike for 2 weeks.',true)}
-  }
+  tickDisasters(svc);
 
   /* Clear failure feedback */
   if(money<0 && !bankruptLatched){
@@ -1847,31 +3391,174 @@ function tick(){
     bankruptLatched=false;
     if(alertKind==='bankrupt') hideAlert();
   }
-  if(population>=40 && powerRatio<0.45 && alertKind!=='bankrupt'){
-    if(alertKind!=='power') showAlert('power', 'Blackout risk — power demand exceeds supply. Build more plants on the road network.');
-  } else if(population>=40 && waterRatio<0.45 && alertKind!=='bankrupt' && alertKind!=='power'){
-    if(alertKind!=='water') showAlert('water', 'Water shortage — add towers/pumps and connect them via roads.');
-  } else if(alertKind==='power' || alertKind==='water'){
-    if(powerRatio>=0.45 && waterRatio>=0.45) hideAlert();
-    else if(alertKind==='power' && powerRatio>=0.45) hideAlert();
-    else if(alertKind==='water' && waterRatio>=0.45) hideAlert();
+  if(alertKind!=='bankrupt' && alertKind!=='fire' && alertKind!=='flood' && alertKind!=='blizzard'){
+    if(population>=40 && powerRatio<0.45){
+      if(alertKind!=='power') showAlert('power', 'Blackout risk — power demand exceeds supply. Build more plants on the road network.');
+    } else if(population>=40 && waterRatio<0.45){
+      if(alertKind!=='water') showAlert('water', 'Water shortage — add towers/pumps and connect them via roads.');
+    } else if(alertKind==='power' || alertKind==='water'){
+      if(powerRatio>=0.45 && waterRatio>=0.45) hideAlert();
+      else if(alertKind==='power' && powerRatio>=0.45) hideAlert();
+      else if(alertKind==='water' && waterRatio>=0.45) hideAlert();
+    }
   }
 
   updateUI(powerRatio,waterRatio,wasteRatio);
 }
 
+function countDrainInfra(){
+  let drains=0, treat=0;
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const def=toolById[grid[x][y].type];
+    if(!def) continue;
+    if(def.id==='drain') drains++;
+    if(def.treat) treat++;
+  }
+  return {drains, treat};
+}
+
+function tickDisasters(svc){
+  if(gameSettings.events===false){
+    /* Still clear lingering hazards when disasters off */
+    if(burningTiles||floodedTiles) clearAllHazards();
+    return;
+  }
+  const ec=gameSettings.eventChance||1;
+  if(Math.random()<0.0003*ec&&population>180&&day>strikeUntil+80){
+    strikeUntil=day+14; happiness-=6;
+    log('TTC strike for 2 weeks — ridership collapses.',true);
+    showToast('TTC strike — transit ridership tanks.', 'warn', 3500);
+    playWarn();
+  }
+
+  /* --- Fire outbreaks --- */
+  const firePower=(svc.fire||0)*fundFire;
+  if(Math.random()<0.00055*ec && population>70 && day%3===0){
+    const cands=[];
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+      const t=grid[x][y];
+      if(!isZone(t)||t.level<=0||t.burning) continue;
+      if(fireInf[x*ROWS+y]*fundFire < 0.35) cands.push(x,y);
+    }
+    if(cands.length>=2){
+      const i=((Math.random()*cands.length/2)|0)*2;
+      const bx=cands[i], by=cands[i+1];
+      grid[bx][by].burning=true;
+      upsertStructure(bx,by);
+      log('Fire outbreak! Build Fire Halls to contain the spread.', true);
+      if(alertKind!=='bankrupt') showAlert('fire', 'Fire outbreak — place <b>Fire Halls</b> nearby and fund Fire. Flames spread without coverage.');
+    }
+  }
+  /* Spread / extinguish */
+  const toIgnite=[];
+  burningTiles=0;
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y];
+    if(!t.burning) continue;
+    burningTiles++;
+    const cover=fireInf[x*ROWS+y]*fundFire;
+    if(cover>0.45 || firePower>2 && cover>0.2){
+      t.burning=false;
+      upsertStructure(x,y);
+      burningTiles--;
+      continue;
+    }
+    if(Math.random()<0.18*(1-cover)){
+      for(const [a,b] of neighbors4(x,y)){
+        const n=grid[a][b];
+        if(((isZone(n)&&n.level>0)||isRoad(n)) && !n.burning && fireInf[a*ROWS+b]*fundFire<0.4) toIgnite.push(a,b);
+      }
+    }
+    if(isZone(t)&&t.level>0&&Math.random()<0.12){ t.level=Math.max(0,t.level-1); upsertStructure(x,y); }
+  }
+  for(let i=0;i<toIgnite.length;i+=2){
+    const t=grid[toIgnite[i]][toIgnite[i+1]];
+    if(!t.burning){ t.burning=true; upsertStructure(toIgnite[i],toIgnite[i+1]); burningTiles++; }
+  }
+  if(burningTiles===0 && alertKind==='fire') hideAlert();
+
+  /* --- Flood near water if drain/treatment weak --- */
+  const infra=countDrainInfra();
+  const drainNeed=Math.max(1, Math.floor(population/400));
+  const drainWeak=infra.drains+infra.treat*2 < drainNeed;
+  floodedTiles=0;
+  if(Math.random()<0.00045*ec && population>90 && drainWeak && day%4===0){
+    const cands=[];
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+      const t=grid[x][y];
+      if(t.terrain!=='land'||t.flooded) continue;
+      if(!nearTerrain(x,y,'water',2)) continue;
+      if(isZone(t)&&t.level>0) cands.push(x,y);
+    }
+    if(cands.length>=2){
+      const i=((Math.random()*cands.length/2)|0)*2;
+      grid[cands[i]][cands[i+1]].flooded=true;
+      upsertStructure(cands[i],cands[i+1]);
+      log('Flooding near the waterfront — add Drain Pipes / Treatment.', true);
+      if(alertKind!=='bankrupt'&&alertKind!=='fire') showAlert('flood', 'Flood risk — shoreline is under water. Build <b>Drain Pipes</b> and <b>Treatment</b> plants.');
+    }
+  }
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y];
+    if(!t.flooded) continue;
+    floodedTiles++;
+    const localDrain=toolById[t.type]?.id==='drain' || (()=>{
+      for(const [a,b] of neighbors4(x,y)) if(grid[a][b].type==='drain'||toolById[grid[a][b].type]?.treat) return true;
+      return false;
+    })();
+    if(!drainWeak || localDrain || infra.drains+infra.treat*2>=drainNeed){
+      if(Math.random()<0.35 || localDrain){ t.flooded=false; upsertStructure(x,y); floodedTiles--; }
+    } else if(Math.random()<0.08){
+      for(const [a,b] of neighbors4(x,y)){
+        const n=grid[a][b];
+        if(n.terrain==='land'&&!n.flooded&&nearTerrain(a,b,'water',3)&&(isZone(n)||n.type==='empty')){
+          n.flooded=true; upsertStructure(a,b); floodedTiles++; break;
+        }
+      }
+    }
+  }
+  if(floodedTiles===0 && alertKind==='flood') hideAlert();
+
+  /* --- Winter blizzard --- */
+  if(seasonIdx===3 && Math.random()<0.0005*ec && population>60 && day>blizzardUntil+40){
+    blizzardUntil=day+12;
+    happiness=Math.max(5, happiness-10);
+    avgTraffic=Math.min(100, avgTraffic+18);
+    log('Blizzard hits the GTA — traffic crawls, spirits drop.', true);
+    if(alertKind!=='bankrupt'&&alertKind!=='fire') showAlert('blizzard', 'Blizzard — happiness and traffic take a hit until the storm passes. Keep services funded.');
+  }
+  if(day>blizzardUntil && alertKind==='blizzard') hideAlert();
+}
+
+function clearAllHazards(){
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y];
+    if(t.burning||t.flooded){ t.burning=false; t.flooded=false; upsertStructure(x,y); }
+  }
+  burningTiles=0; floodedTiles=0;
+  if(alertKind==='fire'||alertKind==='flood'||alertKind==='blizzard') hideAlert();
+}
+
 function refreshLandValue(){
-  const dtx=COLS*0.48, dty=ROWS*0.72;
+  /* Micropolis land value: nature +, pollution/crime/traffic −, services +, CBD gravity */
+  const dtx=cityCenter.x, dty=cityCenter.y;
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y]; if(t.terrain!=='land') continue;
-    let v=28+Math.max(0,22-Math.hypot(x-dtx,y-dty)*0.9);
-    if(y>ROWS-12) v+=12;
-    if(eduInf[x*ROWS+y]>0) v+=6;
-    if(parkInf[x*ROWS+y]>0) v+=10;
-    if(t.pollution>30) v-=t.pollution*0.15;
+    let v=26+Math.max(0,24-Math.hypot(x-dtx,y-dty)*0.85);
+    if(y>ROWS-12) v+=10;
+    if(nearTerrain(x,y,'water',3)) v+=14;
+    if(nearTerrain(x,y,'ravine',2)) v+=6;
+    if(eduInf[x*ROWS+y]>0) v+=7;
+    if(parkInf[x*ROWS+y]>0) v+=11;
+    if(t.pollution>20) v-=t.pollution*0.18;
+    if((t.crime||0)>15) v-=t.crime*0.12;
+    /* local road traffic depresses residential value */
+    let traf=0;
+    for(const [a,b] of neighbors4(x,y)) if(isRoad(grid[a][b])) traf=Math.max(traf, grid[a][b].traffic);
+    if(traf>40) v-=(traf-40)*0.12;
+    if(t.island) v+=8;
     t.landValue=clamp(Math.round(v),5,100);
   }
-  /* skip ground refresh every land-value pass — only on season */
 }
 
 function runBudget(svc,roads){
@@ -1882,8 +3569,23 @@ function runBudget(svc,roads){
     if(def.zone==='res') aR+=av; else if(def.zone==='com'||def.zone==='off') aC+=av; else aI+=av;
   }
   const revenue=Math.round(aR*taxRates.res*0.9+aC*taxRates.com*1.1+aI*taxRates.ind*0.95+Math.min(population,jobs)*0.12);
-  const upkeep=Math.round(roads*1.3+svc.police*90+svc.fire*90+(svc.health||0)*120+(svc.edu||0)*70+svc.park*14+(powerCap/1000)*8+(waterCap/1000)*7+(wasteCap/1000)*5);
+  const upkeep=Math.round(
+    roads*1.35*fundRoads +
+    svc.police*90*fundPolice +
+    svc.fire*90*fundFire +
+    (svc.health||0)*120 +
+    (svc.edu||0)*70 +
+    svc.park*14 +
+    (powerCap/1000)*8 +
+    (waterCap/1000)*7 +
+    (wasteCap/1000)*5
+  );
   const net=revenue-upkeep; money+=net; lastBudget={revenue,upkeep,net};
+  pushHist(hist.pop, population);
+  pushHist(hist.jobs, jobs);
+  pushHist(hist.money, Math.round(money));
+  pushHist(hist.traffic, Math.round(avgTraffic));
+  pushHist(hist.happiness, Math.round(happiness));
   log(`Budget $${revenue.toLocaleString()} in / $${upkeep.toLocaleString()} out · net ${net>=0?'+':''}$${net.toLocaleString()}.`);
 }
 
@@ -1893,9 +3595,14 @@ function updateInspect(pos){
   const t=grid[pos.x][pos.y]; const def=toolById[t.type];
   let name=def?def.label:(t.type==='empty'?'Vacant':'Unknown');
   if(t.parkName) name=t.parkName;
-  const terrain=t.terrain==='water'?'Lake Ontario':t.terrain==='ravine'?'Ravine':'Land';
+  const terrain=t.terrain==='water'?'Lake Ontario':t.terrain==='ravine'?'River / Ravine':'Land';
   let extra='';
-  if(isZone(t)) extra=`Density ${t.level}/${t.densityCap} · Road ${hasRoadAccess(pos.x,pos.y)?'✓':'✗'} · Power ${t.powered?'✓':'✗'} · Water ${t.watered?'✓':'✗'}`;
+  if(isZone(t)){
+    const stage=t.level<=0?'Vacant':(t.buildPhase>0?'Building…':(t.abandoned?'Abandoned L'+t.level:'L'+t.level));
+    const defZ=toolById[t.type];
+    const tmax=zoneToolMaxLevel(defZ);
+    extra=`${stage} · Cap ${t.densityCap}/${tmax} · Road ${hasRoadAccess(pos.x,pos.y)?'✓':'✗'} · Power ${t.powered?'✓':'✗'} · Water ${t.watered?'✓':'✗'} · Trips ${(t.tripFail||0)>3?'✗':'✓'} · Crime ${Math.round(t.crime||0)}`;
+  }
   el.innerHTML=`<div class="title">${name}</div>${terrain}<br>Land value <b>${t.landValue}</b> · Pollution <b>${Math.round(t.pollution)}</b>${extra?`<br>${extra}`:''}`;
 }
 
@@ -1912,7 +3619,14 @@ function updateUI(pr,wr,waster){
   setRci('rci-r',demand.r); setRci('rci-c',demand.c); setRci('rci-i',demand.i); setRci('rci-o',demand.o);
   document.getElementById('happiness-bar').style.width=happiness+'%';
   document.getElementById('hap-d').innerHTML=`Score <b>${Math.round(happiness)}</b>`;
-  document.getElementById('econ').innerHTML=`Last: <b>$${lastBudget.revenue.toLocaleString()}</b> / <b>$${lastBudget.upkeep.toLocaleString()}</b><br>Net <b>${lastBudget.net>=0?'+':''}$${lastBudget.net.toLocaleString()}</b>`;
+  document.getElementById('econ').innerHTML=
+    `Budget <b>$${lastBudget.revenue.toLocaleString()}</b> / <b>$${lastBudget.upkeep.toLocaleString()}</b> · Net <b>${lastBudget.net>=0?'+':''}$${lastBudget.net.toLocaleString()}</b><br>`+
+    `Trips <b>${Math.round(tripStats.rate*100)}%</b> · Transit riders <b>${transitRiders.toLocaleString()}</b>${day<=strikeUntil?' <span style="color:var(--bad)">(strike)</span>':''}<br>`+
+    `Traffic <b>${Math.round(avgTraffic)}</b> · Crime <b>${Math.round(avgCrime)}</b> · Pollution <b>${Math.round(avgPollution)}</b>`+
+    (burningTiles?`<br><span style="color:var(--bad)">Fires active: ${burningTiles}</span>`:'')+
+    (floodedTiles?`<br><span style="color:var(--lake)">Flooded tiles: ${floodedTiles}</span>`:'')+
+    (day<=blizzardUntil?`<br><span style="color:var(--warn)">Blizzard (${blizzardUntil-day}d)</span>`:'');
+  renderHistory();
 
   const tip=document.getElementById('tip');
   let missing='';
@@ -1921,10 +3635,14 @@ function updateUI(pr,wr,waster){
   } else if(hoverTile&&isZone(grid[hoverTile.x][hoverTile.y])){
     const t=grid[hoverTile.x][hoverTile.y];
     if(!hasRoadAccess(hoverTile.x,hoverTile.y)) missing='This zone needs a <strong>road</strong> beside it.';
-    else if(t.level===0) missing='Road connected — waiting for first homes to appear…';
-    else if(!t.powered) missing='Needs <strong>power</strong> (place plant + connect via roads).';
-    else if(!t.watered) missing='Needs <strong>water</strong> (tower/pump + road network).';
-    if(missing){ tip.className='hud-tip warn'; tip.innerHTML=missing; }
+    else if(t.abandoned) missing='Abandoned — restore <strong>power/water/roads</strong> and demand to revive.';
+    else if(t.level===0) missing='Empty zone — with road + demand it will <strong>grow</strong> (scaffold → L1).';
+    else if((t.buildPhase|0)>0) missing='Under construction — upgrading to a denser building…';
+    else if(!t.powered) missing='Needs <strong>power</strong> to upgrade past L1 (plant + roads).';
+    else if(!t.watered) missing='Needs <strong>water</strong> to upgrade (tower + roads).';
+    else if(t.level>=t.densityCap) missing=`At density cap <strong>L${t.level}</strong> — raise land value, services, or rezone High.`;
+    else missing=`L${t.level} growing — parks, police, transit & happiness speed upgrades.`;
+    if(missing){ tip.className='hud-tip'+(t.abandoned||!t.powered||!t.watered?' warn':''); tip.innerHTML=missing; }
     else { tip.className='hud-tip'; tip.innerHTML='<strong>Toronto grows.</strong> Higher density needs power+water. Parks & schools raise land value.'; }
   } else if(population===0){
     tip.className='hud-tip';
@@ -1933,7 +3651,7 @@ function updateUI(pr,wr,waster){
       : '<strong>Get population:</strong> Lay roads inland → Zone <b>R Low</b> → <b>Wind</b> + <b>Water Tower</b> → ▶▶.';
   } else {
     tip.className='hud-tip';
-    tip.innerHTML='<strong>Toronto grows.</strong> Soft goals: 100 pop · High Park · CN Tower. Parks & schools raise land value.';
+    tip.innerHTML='<strong>Toronto grows.</strong> Goals: 100 → 1k → 10k pop · High Park · CN Tower · Airport/Stadium · Metro Toronto. <b>Space</b> pause · <b>B</b> bulldoze.';
   }
 }
 function setRci(id,val){const el=document.getElementById(id);const pct=Math.abs(val)/2; if(val>=0){el.style.left='50%';el.style.width=pct+'%'}else{el.style.left=(50-pct)+'%';el.style.width=pct+'%'}}
@@ -1943,6 +3661,17 @@ function setRci(id,val){const el=document.getElementById(id);const pct=Math.abs(
   const key=k==='r'?'res':k==='c'?'com':'ind';
   sl.oninput=()=>{taxRates[key]=sl.value/100;lab.textContent=sl.value+'%'};
 });
+[['roads','fundRoads'],['police','fundPolice'],['fire','fundFire']].forEach(([id,key])=>{
+  const sl=document.getElementById('fund-'+id), lab=document.getElementById('fund-'+id+'-v');
+  if(!sl) return;
+  sl.oninput=()=>{
+    const v=Number(sl.value)/100;
+    if(key==='fundRoads') fundRoads=v;
+    else if(key==='fundPolice') fundPolice=v;
+    else fundFire=v;
+    lab.textContent=sl.value+'%';
+  };
+});
 
 let tickHandle=null;
 function setSpeed(s){
@@ -1951,7 +3680,7 @@ function setSpeed(s){
   document.getElementById('btn-normal').classList.toggle('active',s===1);
   document.getElementById('btn-fast').classList.toggle('active',s===2);
   if(tickHandle) clearInterval(tickHandle);
-  if(s>0) tickHandle=setInterval(tick, s===1?500:200);
+  if(s>0) tickHandle=setInterval(tick, s===1?280:95);
 }
 document.getElementById('btn-pause').onclick=()=>setSpeed(0);
 document.getElementById('btn-normal').onclick=()=>setSpeed(1);
@@ -1959,12 +3688,15 @@ document.getElementById('btn-fast').onclick=()=>setSpeed(2);
 
 document.getElementById('btn-save').onclick=()=>saveCity(false);
 document.getElementById('btn-share').onclick=()=>shareCity();
+const muteBtn=document.getElementById('btn-mute');
+if(muteBtn) muteBtn.onclick=()=>{ setAudioMuted(!audioMuted); };
+window.addEventListener('pointerdown',()=>{ if(!audioMuted && !ambientCtl) ensureAmbient(); },{passive:true});
 document.getElementById('btn-load').onclick=()=>{
   try{
     const raw=localStorage.getItem('metroTorontoCS'); if(!raw){log('No save.',true);return}
     const s=JSON.parse(raw); grid=s.grid; money=Number(s.money); if(!Number.isFinite(money)) money=55000;
     day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
-    happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1;
+    happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1; blizzardUntil=s.blizzardUntil??-1;
     if(s.settings) gameSettings=Object.assign({}, gameSettings, s.settings);
     population=0;
     for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
@@ -1972,6 +3704,11 @@ document.getElementById('btn-load').onclick=()=>{
       if(isZone(t)&&t.level>0&&def&&def.zone==='res') population+=t.level*(def.density==='high'?28:16);
     }
     loadMilestonesFromSave(s);
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+      if(grid[x][y].type==='park_highpark') milestones.highpark=true;
+      if(grid[x][y].type==='cntower') milestones.cntower=true;
+      if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
+    }
     placeLabels(Math.floor(ROWS*0.28)); worldDirty=true; structuresDirty=true; applySeasonLook();
     recomputeUtilities(); updateUI(1,1,1); renderGoals(); renderToolbar(); applyTutorialFocus();
     log('Loaded.');
@@ -2002,7 +3739,7 @@ function applyNewGame(settings){
       if(!raw) throw new Error('No save');
       const s=JSON.parse(raw); grid=s.grid; money=Number(s.money); if(!Number.isFinite(money)) money=55000;
       day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
-      happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1;
+      happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1; blizzardUntil=s.blizzardUntil??-1;
       if(s.settings) gameSettings=Object.assign({}, gameSettings, s.settings, {continueSave:false});
       population=0;
       for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
@@ -2013,6 +3750,7 @@ function applyNewGame(settings){
       for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
         if(grid[x][y].type==='park_highpark') milestones.highpark=true;
         if(grid[x][y].type==='cntower') milestones.cntower=true;
+        if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
       }
       placeLabels(Math.floor(ROWS*0.28));
       logEl.innerHTML=''; log('Continued saved city.');
@@ -2020,15 +3758,17 @@ function applyNewGame(settings){
       makeTerrain();
       money=Number(gameSettings.money)||55000; day=0; year=1; seasonIdx=clamp(Number(gameSettings.season)||0,0,3);
       happiness=62; strikeUntil=-1; lastBudget={revenue:0,upkeep:0,net:0};
-      milestones={firstPop:false,pop100:false,highpark:false,cntower:false};
+      milestones={firstPop:false,pop100:false,pop1k:false,pop10k:false,highpark:false,cntower:false,landmark:false,metroToronto:false};
       tutorialStep=0; tutorialActive=!!gameSettings.guide;
       logEl.innerHTML=''; log('No save found — started fresh.');
     }
   } else {
     makeTerrain();
     money=Number(gameSettings.money)||55000; day=0; year=1; seasonIdx=clamp(Number(gameSettings.season)||0,0,3);
-    happiness=62; strikeUntil=-1; lastBudget={revenue:0,upkeep:0,net:0};
-    milestones={firstPop:false,pop100:false,highpark:false,cntower:false};
+    happiness=62; strikeUntil=-1; blizzardUntil=-1; lastBudget={revenue:0,upkeep:0,net:0};
+    transitRiders=0; burningTiles=0; floodedTiles=0;
+    hist.pop=[]; hist.jobs=[]; hist.money=[]; hist.traffic=[]; hist.happiness=[];
+    milestones={firstPop:false,pop100:false,pop1k:false,pop10k:false,highpark:false,cntower:false,landmark:false,metroToronto:false};
     tutorialStep=0; tutorialActive=!!gameSettings.guide;
     bankruptLatched=false; hideAlert();
     logEl.innerHTML='';
@@ -2051,11 +3791,8 @@ function resize(){const w=wrap.clientWidth,h=wrap.clientHeight; camera.aspect=w/
 window.addEventListener('resize',resize); resize(); updateCamera();
 
 function projectLabels(){
-  const key=orbit.goal.theta.toFixed(2)+'|'+orbit.goal.phi.toFixed(2)+'|'+orbit.goal.radius.toFixed(1)+'|'+orbit.target.x.toFixed(0)+'|'+orbit.target.z.toFixed(0);
-  if(key===_labelCamKey) return;
-  _labelCamKey=key;
   const w=wrap.clientWidth,h=wrap.clientHeight;
-  const hide=orbit.goal.radius>70;
+  const hide=orbit.spherical.radius>70;
   for(const el of labelEls){
     if(hide){el.style.display='none';continue}
     const v=new THREE.Vector3(el._lm.x+0.5,1.2,el._lm.y+0.5); v.project(camera);
@@ -2074,6 +3811,7 @@ function animate(){
   const dt=Math.min(0.05,(now-_camLastT)*0.001);
   _camLastT=now;
   stepCamera(dt);
+  stepAgents(dt);
   if(insufficientFlash>0){renderer.setClearColor(0x3a1520);insufficientFlash--; if(insufficientFlash===0) applySeasonLook();}
   renderer.render(scene,camera); projectLabels();
 }
@@ -2099,16 +3837,20 @@ if(gameSettings.continueSave){
     if(raw){
       const s=JSON.parse(raw); grid=s.grid; money=Number(s.money); if(!Number.isFinite(money)) money=55000;
       day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
-      happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1;
+      happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1; blizzardUntil=s.blizzardUntil??-1;
       if(s.settings) gameSettings=Object.assign({}, gameSettings, s.settings, {continueSave:false});
       population=0;
       for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
         const t=grid[x][y], def=toolById[t.type];
         if(isZone(t)&&t.level>0&&def&&def.zone==='res') population+=t.level*(def.density==='high'?28:16);
-        if(t.type==='park_highpark') milestones.highpark=true;
-        if(t.type==='cntower') milestones.cntower=true;
       }
       loadMilestonesFromSave(s);
+      for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+        const tp=grid[x][y].type;
+        if(tp==='park_highpark') milestones.highpark=true;
+        if(tp==='cntower') milestones.cntower=true;
+        if(tp==='airport'||tp==='stadium') milestones.landmark=true;
+      }
       placeLabels(Math.floor(ROWS*0.28)); worldDirty=true; structuresDirty=true; applySeasonLook(); recomputeUtilities(); updateUI(1,1,1);
       renderGoals(); renderToolbar();
       if(guideEl) guideEl.classList.add('hidden');
@@ -2126,7 +3868,8 @@ log('Metro Builder Toronto — '+modeName+' mode.');
 log(gameSettings.with401!==false
   ? 'Tip: Connect a street south from the 401, zone R Low beside it, add wind + water.'
   : 'Tip: Lay roads from the harbour inland, zone R Low, add wind + water.');
-log('Tip: Phone pad for camera · Desktop LMB paint · RMB orbit · WASD pan. Autosave is on.');
+log('Tip: Cities: Skylines controls — LMB build · MMB rotate/tilt · RMB drag pan · edge/WASD pan · wheel zoom · Esc cancel · Q/E · Z/X · Home/End · Space pause · 1/2/3 speed · B bulldoze · 4–9 zones.');
+log('Tip: Disasters (lobby toggle) — fires need Fire Halls, floods need drains/treatment, blizzards hit winter.');
 } /* end startGame */
 })();
 </script>
