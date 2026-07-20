@@ -1,4 +1,10 @@
-﻿.DS_Store
-Thumbs.db
-.netlify/
+﻿# bulky raw downloads (regenerate via tools/bake-gta-mask.mjs)
+data/osm-water.json
+data/ne_10m_lakes.geojson
+data/toronto-ravines.geojson
+data/toronto-shoreline.geojson
+data/toronto-rivers.geojson
+tools/_geo-snippet.js
+_parsecheck.js
 node_modules/
+.netlify/

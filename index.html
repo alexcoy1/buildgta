@@ -569,6 +569,7 @@ aside.panel{
 </div>
 </div>
 
+<script src="gta-geo.js"></script>
 <script>
 (function(){
 'use strict';
@@ -720,7 +721,10 @@ if(appRoot) appRoot.style.visibility='visible';
 const settings=launchSettings||gameSettings||{};
 gameSettings=settings;
 
-const COLS=80, ROWS=54, CELL=1;
+/* True-scale GTA grid from open.toronto.ca + OSM (see gta-geo.js) */
+const GTA=window.GTA_GEO;
+if(!GTA||!GTA.maskB64){ showBootError('Missing gta-geo.js — true-scale map data failed to load.'); return; }
+const COLS=GTA.cols|0, ROWS=GTA.rows|0, CELL=1;
 const SEASONS=['Spring','Summer','Fall','Winter'];
 const DAYS=90;
 
@@ -1196,139 +1200,84 @@ function rebuildLabelDom(){
   labelEls=landmarks.map(lm=>{const el=document.createElement('div');el.className='map-label';el.textContent=lm.name;el._lm=lm;layer.appendChild(el);return el});
 }
 
-/* ---- Terrain: Hamilton → Oshawa GTA corridor (open-geo silhouette) ----
+/* ---- Terrain: exact-scale Hamilton→Oshawa from open.toronto.ca + OSM ----
    x: west→east  Hamilton…Mississauga…Toronto…Scarborough…Oshawa
    y: north→south  inland → Lake Ontario
+   Cells are equal metres (no cartoon stretch). Fake islands removed.
 */
-function gtaShoreY(x){
-  const t=x/(COLS-1);
-  /* Base lake occupies southern band */
-  let shore=Math.floor(ROWS*0.76);
-  /* Hamilton Harbour / Burlington Bay — water cuts north into land (west) */
-  if(t<0.12){
-    const u=t/0.12;
-    const bay=Math.sin(u*Math.PI);
-    shore-=Math.round(5+bay*5); /* harbour notch */
-    if(u<0.35) shore-=Math.round((0.35-u)*8); /* west spit / harbour mouth */
-  }
-  /* Burlington–Oakville–Mississauga: gentle SW–NE lake curve */
-  else if(t<0.38){
-    shore+=Math.round(Math.sin((t-0.12)/0.26*Math.PI)*1.8)-1;
-  }
-  /* Toronto Harbour indentation (central waterfront) */
-  else if(t<0.58){
-    const u=(t-0.38)/0.20;
-    const harbour=Math.sin(u*Math.PI);
-    shore-=Math.round(3+harbour*5); /* deep harbour notch for islands */
-  }
-  /* Scarborough Bluffs — shoreline steps south, cliff face */
-  else if(t<0.72){
-    shore+=Math.round(2+Math.sin((t-0.58)/0.14*Math.PI)*2);
-  }
-  /* Durham (Pickering–Oshawa) along lake */
-  else{
-    shore+=Math.round(1+Math.sin((t-0.72)/0.28*Math.PI)*1.5);
-  }
-  shore+=Math.round((noise2(x*0.31, 2)-0.5)*1.4);
-  return clamp(shore, Math.floor(ROWS*0.52), ROWS-3);
+function decodeGtaMask(){
+  const bin=atob(GTA.maskB64);
+  const out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
 }
-
-function carveRiver(startX, mouthY, amp, freq, halfW, seed){
-  let rx=startX;
-  for(let y=0;y<mouthY;y++){
-    rx+=Math.round(Math.sin(y*freq+seed)*amp+(noise2(y*0.2,seed)-0.5)*0.8);
-    const w=y<mouthY*0.25?halfW+1:(y>mouthY*0.75?halfW+1:halfW);
-    for(let k=-w;k<=w;k++){
-      const xx=rx+k;
-      if(inBounds(xx,y)&&grid[xx][y].terrain==='land'){
-        grid[xx][y].terrain='ravine';
-        grid[xx][y].landValue=22;
-        grid[xx][y].elev=-0.42;
-      }
-    }
+function shoreYAt(x){
+  /* First water cell from north in column x — for elevation / 401 hints */
+  for(let y=0;y<ROWS;y++){
+    const t=grid[x][y].terrain;
+    if(t==='water') return y;
   }
+  return ROWS-1;
+}
+function geoLabel(name, fallbackX, fallbackY){
+  const hit=(GTA.labels||[]).find(l=>l.name===name);
+  if(hit) return [hit.x|0, hit.y|0, name];
+  return [fallbackX, fallbackY, name];
 }
 
 function makeTerrain(){
   grid=[]; landmarks=[];
+  const mask=decodeGtaMask();
+  if(mask.length!==COLS*ROWS){
+    console.error('GTA mask size mismatch', mask.length, COLS*ROWS);
+  }
   for(let x=0;x<COLS;x++){grid[x]=[];for(let y=0;y<ROWS;y++){
-    grid[x][y]={terrain:'land',type:'empty',level:0,landValue:40,pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,parkId:null,parkName:null,spec:null,island:false,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false,elev:0};
+    const code=mask[x*ROWS+y]|0; /* 0 land, 1 water, 2 ravine, 3 island */
+    const isWater=code===1;
+    const isRav=code===2;
+    const isIsland=code===3;
+    grid[x][y]={
+      terrain:isWater?'water':(isRav?'ravine':'land'),
+      type:'empty',level:0,landValue:isWater?0:(isIsland?56:40),
+      pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,
+      parkId:null,parkName:null,spec:null,
+      island:isIsland,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false,
+      elev:isWater?-0.55:(isRav?-0.42:(isIsland?0.06:0))
+    };
   }}
 
-  /* Lake Ontario + Hamilton Harbour bay */
   const shoreAt=[];
-  for(let x=0;x<COLS;x++){
-    const shore=gtaShoreY(x);
-    shoreAt[x]=shore;
-    for(let y=shore;y<ROWS;y++){
-      grid[x][y].terrain='water';
-      grid[x][y].landValue=0;
-      grid[x][y].elev=-0.55;
-    }
-  }
-  /* Extra Hamilton harbour pocket (west inland lagoon feel) */
-  for(let x=0;x<Math.floor(COLS*0.10);x++){
-    for(let y=Math.floor(ROWS*0.62);y<shoreAt[x];y++){
-      if(noise2(x*0.4,y*0.3)>0.35){
-        grid[x][y].terrain='water'; grid[x][y].landValue=0; grid[x][y].elev=-0.5;
-      }
-    }
-  }
+  for(let x=0;x<COLS;x++) shoreAt[x]=shoreYAt(x);
 
-  /* Toronto Islands in harbour notch */
-  const icx=Math.floor(COLS*0.48), icy=ROWS-5;
-  for(let x=icx-9;x<=icx+11;x++)for(let y=icy-2;y<=icy+2;y++){
-    if(!inBounds(x,y)) continue;
-    const dx=(x-icx)/10, dy=(y-icy)/2.2;
-    if(dx*dx+dy*dy<1.05+noise2(x,y)*0.18){
-      grid[x][y].terrain='land'; grid[x][y].type='empty';
-      grid[x][y].landValue=56; grid[x][y].island=true; grid[x][y].elev=0.06;
-    }
-  }
-  /* Ferry channels through islands */
-  for(let y=ROWS-7;y<ROWS-3;y++){
-    if(inBounds(icx-2,y)){ grid[icx-2][y].terrain='water'; grid[icx-2][y].island=false; grid[icx-2][y].elev=-0.5; }
-    if(inBounds(icx+3,y)){ grid[icx+3][y].terrain='water'; grid[icx+3][y].island=false; grid[icx+3][y].elev=-0.5; }
-  }
-
-  /* Rivers / ravines cutting to the lake (west→east) */
-  carveRiver(Math.floor(COLS*0.26), shoreAt[Math.floor(COLS*0.26)]||Math.floor(ROWS*0.75), 0.7, 0.20, 1, 1.1); /* Credit */
-  carveRiver(Math.floor(COLS*0.36), shoreAt[Math.floor(COLS*0.36)]||Math.floor(ROWS*0.72), 0.9, 0.22, 1, 2.3); /* Humber */
-  carveRiver(Math.floor(COLS*0.54), shoreAt[Math.floor(COLS*0.54)]||Math.floor(ROWS*0.70), 1.3, 0.26, 2, 0.7); /* Don */
-  carveRiver(Math.floor(COLS*0.68), shoreAt[Math.floor(COLS*0.68)]||Math.floor(ROWS*0.78), 0.8, 0.24, 1, 3.1); /* Rouge */
-  carveRiver(Math.floor(COLS*0.78), shoreAt[Math.floor(COLS*0.78)]||Math.floor(ROWS*0.78), 0.6, 0.28, 1, 4.0); /* Duffins */
-  carveRiver(Math.floor(COLS*0.92), shoreAt[Math.floor(COLS*0.92)]||Math.floor(ROWS*0.78), 0.55, 0.25, 1, 5.2); /* Oshawa Creek */
-
-  /* 3D relief: lakeshore low, inland rise, Scarborough bluffs cliff, CBD plateau */
-  const dtx=Math.floor(COLS*0.48), dty=Math.floor(ROWS*0.68);
+  const dt=geoLabel('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.42));
+  const dtx=dt[0], dty=dt[1];
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y];
     if(t.terrain==='water'){ t.elev=-0.55; continue; }
     if(t.terrain==='ravine'){ t.elev=-0.42; continue; }
     if(t.island){ t.elev=0.06; continue; }
-    const shore=shoreAt[x]||Math.floor(ROWS*0.76);
+    const shore=shoreAt[x];
     const distShore=Math.max(0, shore-y);
-    let elev=0.04+Math.min(0.38, distShore*0.014);
+    let elev=0.04+Math.min(0.38, distShore*0.012);
     /* Niagara Escarpment hint — western inland rise (Hamilton–Burlington) */
-    if(x<COLS*0.16 && y<ROWS*0.55) elev+=0.12+noise2(x,y)*0.04;
-    /* Scarborough Bluffs: high land right at shore */
-    if(x>COLS*0.60 && x<COLS*0.74 && distShore<=4 && distShore>=0) elev=Math.max(elev, 0.32);
-    /* Soft micro-relief */
+    if(x<COLS*0.14 && y>ROWS*0.55) elev+=0.10+noise2(x,y)*0.04;
+    /* Scarborough Bluffs: high land near eastern Toronto shore */
+    if(x>COLS*0.58 && x<COLS*0.72 && distShore<=4 && distShore>=0) elev=Math.max(elev, 0.30);
     elev+=(noise2(x*0.17,y*0.19)-0.5)*0.05;
     t.elev=elev;
-    /* Land values — CBD gravity + waterfront premium */
-    let v=28+Math.max(0,42-Math.hypot(x-dtx,y-dty)*1.45);
+    let v=28+Math.max(0,42-Math.hypot(x-dtx,y-dty)*1.2);
     if(nearTerrain(x,y,'water',3)) v+=16;
     if(nearTerrain(x,y,'ravine',2)) v+=7;
-    if(y<ROWS*0.32) v-=5; /* northern suburbs cheaper */
-    if(x<COLS*0.18) v-=4; /* west end slightly lower density pressure */
-    if(x>COLS*0.75) v-=3; /* Durham */
+    if(y<ROWS*0.25) v-=5;
+    if(x<COLS*0.15) v-=4;
+    if(x>COLS*0.78) v-=3;
     if(t.island) v=56;
     t.landValue=clamp(Math.round(v+noise2(x,y)*8),15,95);
   }
 
-  /* Highway 401 — east–west spine across the corridor */
-  const y401=Math.floor(ROWS*0.30);
+  /* Highway 401 — place near real ~43.75N corridor label */
+  const hwy=geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.28));
+  const y401=clamp(hwy[1]|0, 2, ROWS-3);
   if(gameSettings.with401!==false){
     for(let x=0;x<COLS;x++){
       const cell=grid[x][y401];
@@ -1337,32 +1286,29 @@ function makeTerrain(){
       cell.level=0;
     }
   }
-  cityCenter={x:COLS*0.48, y:ROWS*0.68};
+  cityCenter={x:dtx, y:dty};
   placeLabels(y401);
   worldDirty=true; structuresDirty=true;
 }
 
 function placeLabels(y401){
+  const L=(name,fx,fy)=>geoLabel(name, fx, fy);
   landmarks=[
     gameSettings.with401!==false ? [Math.floor(COLS*0.48), y401, 'Highway 401'] : null,
-    [Math.floor(COLS*0.05), Math.floor(ROWS*0.55), 'Hamilton'],
-    [Math.floor(COLS*0.12), Math.floor(ROWS*0.62), 'Burlington'],
-    [Math.floor(COLS*0.22), Math.floor(ROWS*0.58), 'Oakville'],
-    [Math.floor(COLS*0.30), Math.floor(ROWS*0.55), 'Mississauga'],
-    [Math.floor(COLS*0.36), Math.floor(ROWS*0.50), 'Humber'],
-    [Math.floor(COLS*0.40), Math.floor(ROWS*0.58), 'Etobicoke'],
-    [Math.floor(COLS*0.48), Math.floor(ROWS*0.68), 'Downtown Toronto'],
-    [Math.floor(COLS*0.48), Math.floor(ROWS*0.62), 'Harbourfront'],
-    [Math.floor(COLS*0.48), ROWS-4, 'Toronto Islands'],
-    [Math.floor(COLS*0.50), Math.floor(ROWS*0.40), 'North York'],
-    [Math.floor(COLS*0.54), Math.floor(ROWS*0.35), 'Don Valley'],
-    [Math.floor(COLS*0.64), Math.floor(ROWS*0.55), 'Scarborough'],
-    [Math.floor(COLS*0.68), Math.floor(ROWS*0.72), 'Bluffs'],
-    [Math.floor(COLS*0.74), Math.floor(ROWS*0.58), 'Pickering'],
-    [Math.floor(COLS*0.80), Math.floor(ROWS*0.55), 'Ajax'],
-    [Math.floor(COLS*0.86), Math.floor(ROWS*0.55), 'Whitby'],
-    [Math.floor(COLS*0.94), Math.floor(ROWS*0.55), 'Oshawa'],
-    [Math.floor(COLS*0.50), ROWS-2, 'Lake Ontario'],
+    L('Hamilton', Math.floor(COLS*0.06), Math.floor(ROWS*0.95)),
+    L('Burlington', Math.floor(COLS*0.12), Math.floor(ROWS*0.88)),
+    L('Oakville', Math.floor(COLS*0.22), Math.floor(ROWS*0.70)),
+    L('Mississauga', Math.floor(COLS*0.26), Math.floor(ROWS*0.50)),
+    L('Etobicoke', Math.floor(COLS*0.35), Math.floor(ROWS*0.45)),
+    L('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.42)),
+    L('Toronto Islands', Math.floor(COLS*0.49), Math.floor(ROWS*0.46)),
+    L('North York', Math.floor(COLS*0.47), Math.floor(ROWS*0.26)),
+    L('Scarborough', Math.floor(COLS*0.62), Math.floor(ROWS*0.30)),
+    L('Pickering', Math.floor(COLS*0.74), Math.floor(ROWS*0.15)),
+    L('Ajax', Math.floor(COLS*0.80), Math.floor(ROWS*0.14)),
+    L('Whitby', Math.floor(COLS*0.87), Math.floor(ROWS*0.12)),
+    L('Oshawa', Math.floor(COLS*0.94), Math.floor(ROWS*0.08)),
+    L('Lake Ontario', Math.floor(COLS*0.65), Math.floor(ROWS*0.70)),
   ].filter(Boolean).filter(([x,y])=>inBounds(x,y)).map(([x,y,name])=>({x,y,name}));
   rebuildLabelDom();
 }
@@ -1416,16 +1362,17 @@ renderer.toneMappingExposure=1.15;
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x3a6a7a);
 scene.fog=new THREE.FogExp2(0x4a7a88, 0.0011);
-const camera=new THREE.PerspectiveCamera(42,1,0.1,400);
-/* North of the 401, looking south at downtown / harbour */
-const y401cam=Math.floor(ROWS*0.28);
-camera.position.set(COLS*0.48, 42, y401cam - 18);
+const camera=new THREE.PerspectiveCamera(42,1,0.1,500);
+/* Start overlooking downtown / harbour (true lat positions from GTA_GEO) */
+const _dtCam=geoLabel('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.42));
+const y401cam=clamp((geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.28))[1])|0, 2, ROWS-3);
+camera.position.set(_dtCam[0], 48, y401cam - 14);
 
 const ORBIT_DEG=Math.PI/180;
-const _orbitLook=Math.floor(ROWS*0.55);
+const _orbitLook=_dtCam[1];
 const orbit={
-  target:new THREE.Vector3(COLS*0.48, 0, _orbitLook),
-  targetGoal:new THREE.Vector3(COLS*0.48, 0, _orbitLook),
+  target:new THREE.Vector3(_dtCam[0], 0, _orbitLook),
+  targetGoal:new THREE.Vector3(_dtCam[0], 0, _orbitLook),
   spherical:new THREE.Spherical(),
   goal:new THREE.Spherical(),
   rotating:false, panning:false, paintingActive:false,
@@ -1756,8 +1703,9 @@ const harbourMat=new THREE.MeshPhongMaterial({
   color:0x1a6080, transparent:true, opacity:0.45, depthWrite:false,
   emissive:0x082030, emissiveIntensity:0.2, shininess:42, specular:0x6aa8b8
 });
-const harbourPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS*0.55,10), harbourMat);
-harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(COLS*0.5,-0.72,ROWS-5); scene.add(harbourPlane);
+const harbourPlane=new THREE.Mesh(new THREE.PlaneGeometry(22,12), harbourMat);
+const _isl=geoLabel('Toronto Islands', Math.floor(COLS*0.49), Math.floor(ROWS*0.46));
+harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(_isl[0],-0.72,_isl[1]); scene.add(harbourPlane);
 
 function applySeasonLook(){
   const s=seasonIdx;
