@@ -515,8 +515,12 @@ let demand={r:30,c:15,i:18,o:10};
 let lastBudget={revenue:0,upkeep:0,net:0};
 let avgTraffic=0, avgPollution=0, strikeUntil=-1;
 let hoverTile=null, painting=false;
-let worldDirty=true, structuresDirty=true;
+let worldDirty=true, structuresDirty=true, utilDirty=true;
 let labelEls=[];
+let _labelCamKey='';
+const eduInf=new Float32Array(COLS*ROWS);
+const parkInf=new Float32Array(COLS*ROWS);
+let infDirty=true;
 
 const logEl=document.getElementById('log');
 function log(msg,ev){const d=document.createElement('div');if(ev)d.className='ev';d.textContent=`[Y${year} ${SEASONS[seasonIdx]}] ${msg}`;logEl.prepend(d);while(logEl.children.length>70)logEl.removeChild(logEl.lastChild)}
@@ -638,8 +642,8 @@ day=0; year=1; happiness=62; strikeUntil=-1;
 /* ---- Three.js + custom orbit (RTS / city-builder) ---- */
 const wrap=document.getElementById('wrap');
 const canvas=document.getElementById('game');
-const renderer=new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+const renderer=new THREE.WebGLRenderer({canvas, antialias:false, powerPreference:'high-performance'});
+renderer.setPixelRatio(1);
 renderer.setClearColor(0x0c1a24);
 renderer.shadowMap.enabled=false;
 
@@ -747,44 +751,55 @@ function zoomOrbit(deltaY){
   orbit.goal.radius=clamp(orbit.goal.radius*factor, orbit.minR, orbit.maxR);
 }
 
-const ambient=new THREE.AmbientLight(0xb0c4d0, 0.62);
+const ambient=new THREE.AmbientLight(0xb0c4d0, 0.78);
 scene.add(ambient);
-const sun=new THREE.DirectionalLight(0xfff0d8, 0.85);
+const sun=new THREE.DirectionalLight(0xfff0d8, 0.95);
 sun.position.set(48,62,18);
 sun.castShadow=false;
 scene.add(sun);
-const fill=new THREE.DirectionalLight(0x5a90a8, 0.32); fill.position.set(-35,22,-45); scene.add(fill);
-const hemi=new THREE.HemisphereLight(0x8eb8c8, 0x2a3a28, 0.28); scene.add(hemi);
 
-/* Lake Ontario underlay — animated teal */
-const waterMat=new THREE.MeshStandardMaterial({color:0x156878, roughness:0.35, metalness:0.18, emissive:0x042028, emissiveIntensity:0.15});
+/* Shared Lambert materials — Standard/PBR per-building was the FPS killer */
+const matCache=new Map();
+function mat(hex, opacity){
+  const op=opacity==null?1:opacity;
+  const key=(hex>>>0)+'|'+op;
+  let m=matCache.get(key);
+  if(!m){
+    m=new THREE.MeshLambertMaterial({color:hex>>>0, transparent:op<1, opacity:op, depthWrite:op>=1});
+    matCache.set(key,m);
+  }
+  return m;
+}
+
+/* Lake Ontario underlay */
+const waterMat=new THREE.MeshLambertMaterial({color:0x156878});
 const waterPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS+28,ROWS+28), waterMat);
 waterPlane.rotation.x=-Math.PI/2; waterPlane.position.set(COLS/2,-0.85,ROWS/2); scene.add(waterPlane);
 /* Harbour depth tint plane (slightly darker, smaller) */
-const harbourMat=new THREE.MeshStandardMaterial({color:0x0a4050, roughness:0.45, metalness:0.12, transparent:true, opacity:0.55});
+const harbourMat=new THREE.MeshLambertMaterial({color:0x0a4050, transparent:true, opacity:0.55, depthWrite:false});
 const harbourPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS*0.55,10), harbourMat);
 harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(COLS*0.5,-0.72,ROWS-5); scene.add(harbourPlane);
 
 function applySeasonLook(){
   const s=seasonIdx;
   if(s===0){ /* Spring — soft cool */
-    ambient.color.setHex(0xb8cdd8); ambient.intensity=0.5;
-    sun.color.setHex(0xfff4e4); sun.intensity=0.92;
+    ambient.color.setHex(0xb8cdd8); ambient.intensity=0.72;
+    sun.color.setHex(0xfff4e4); sun.intensity=0.95;
     scene.fog.color.setHex(0x163040); scene.fog.density=0.0072;
     renderer.setClearColor(0x0d1c28);
   } else if(s===1){ /* Summer — clearer, warmer */
-    ambient.color.setHex(0xc8d8e0); ambient.intensity=0.55;
+    ambient.color.setHex(0xc8d8e0); ambient.intensity=0.78;
     sun.color.setHex(0xfff8ec); sun.intensity=1.05;
     scene.fog.color.setHex(0x1a4050); scene.fog.density=0.0058;
     renderer.setClearColor(0x102838);
   } else if(s===2){ /* Fall — dusk amber */
-    ambient.color.setHex(0xc0a890); ambient.intensity=0.42;
-    sun.color.setHex(0xffc080); sun.intensity=0.78;
+    ambient.color.setHex(0xc0a890); ambient.intensity=0.65;
+    sun.color.setHex(0xffc080); sun.intensity=0.85;
     scene.fog.color.setHex(0x2a2830); scene.fog.density=0.0085;
     renderer.setClearColor(0x181820);
   } else { /* Winter — cool snow light */
-    ambient.color.setHex(0xd0dce8); ambient.intensity=0.58;
-    sun.color.setHex(0xe8f0ff); sun.intensity=0.85;
+    ambient.color.setHex(0xd0dce8); ambient.intensity=0.72;
+    sun.color.setHex(0xe8f0ff); sun.intensity=0.9;
     scene.fog.color.setHex(0x203040); scene.fog.density=0.0065;
     renderer.setClearColor(0x142030);
   }
@@ -792,7 +807,7 @@ function applySeasonLook(){
 
 const hoverMesh=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.1,0.95), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
 hoverMesh.visible=false; scene.add(hoverMesh);
-const ghostMesh=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.45,0.7), new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:0.4,depthWrite:false}));
+const ghostMesh=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.45,0.7), new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:0.4,depthWrite:false}));
 ghostMesh.visible=false; scene.add(ghostMesh);
 
 let groundMesh=null;
@@ -847,8 +862,7 @@ function waterTileColor(x,y){
 
 function rebuildGround(){
   if(!groundMesh){
-    const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.98,1,0.98), new THREE.MeshStandardMaterial({roughness:0.88, metalness:0.04}), COLS*ROWS);
-    mesh.receiveShadow=true;
+    const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.98,1,0.98), new THREE.MeshLambertMaterial({}), COLS*ROWS);
     groundMesh=mesh;
     scene.add(mesh);
   }
@@ -953,10 +967,7 @@ function disposeObject3D(obj){
     [...obj.children].forEach(c=>disposeObject3D(c));
   }
   if(obj.geometry) obj.geometry.dispose();
-  if(obj.material){
-    if(Array.isArray(obj.material)) obj.material.forEach(m=>m.dispose());
-    else obj.material.dispose();
-  }
+  /* materials shared via mat() — do not dispose */
 }
 
 function clearStructures(){
@@ -968,21 +979,7 @@ function clearStructures(){
   structureKey.clear();
 }
 
-function addWindowEmissive(mesh, w, h, intensity){
-  const winMat=new THREE.MeshStandardMaterial({
-    color:0x1a2430, emissive:0xffe8a0, emissiveIntensity:intensity,
-    roughness:0.3, metalness:0.2
-  });
-  const rows=Math.min(4, Math.max(1, Math.floor(h/0.5)));
-  const cols=2;
-  for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
-      const win=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.12,0.02), winMat);
-      win.position.set((c-0.5)*w*0.35, -h/2+0.3+r*0.4, w/2+0.01);
-      mesh.add(win);
-    }
-  }
-}
+function addWindowEmissive(){ /* disabled — per-window meshes tanked FPS */ }
 
 function structureSig(t){
   return t.type+'|'+t.level+'|'+(t.parkId||'')+'|'+(t.spec||'');
@@ -1004,13 +1001,13 @@ function upsertStructure(x,y){
   /* ---- CN Tower ploppable ---- */
   if(t.type==='cntower'){
     const g=new THREE.Group();
-    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.22,4.2,10), new THREE.MeshStandardMaterial({color:0xd0d4d8, roughness:0.35, metalness:0.45}));
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.22,4.2,8), mat(0xd0d4d8));
     shaft.position.y=2.1; g.add(shaft);
-    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.38,0.35,12), new THREE.MeshStandardMaterial({color:0xb8c0c8, roughness:0.3, metalness:0.5, emissive:0x334455, emissiveIntensity:0.2}));
+    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.38,0.35,10), mat(0xb8c0c8));
     pod.position.y=3.9; g.add(pod);
-    const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.08,1.6,6), new THREE.MeshStandardMaterial({color:0xc8102e, roughness:0.4, metalness:0.3, emissive:0xc8102e, emissiveIntensity:0.15}));
+    const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.08,1.6,6), mat(0xc8102e));
     tip.position.y=5.0; g.add(tip);
-    const base=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.2,0.7), new THREE.MeshStandardMaterial({color:0x6a7078}));
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.2,0.7), mat(0x6a7078));
     base.position.y=0.1; g.add(base);
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
@@ -1018,27 +1015,19 @@ function upsertStructure(x,y){
   else if(def&&def.park){
     const g=new THREE.Group();
     const grassCol=def.parkColor||0x3d6b35;
-    const base=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.08,0.92), new THREE.MeshStandardMaterial({color:grassCol, roughness:0.95}));
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.08,0.92), mat(grassCol));
     base.position.y=0.04; g.add(base);
-    const treeN=3+Math.floor(noise2(x,y)*3);
-    for(let i=0;i<treeN;i++){
-      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,0.18,5), new THREE.MeshStandardMaterial({color:0x4a3020}));
-      const foliage=new THREE.Mesh(
-        new THREE.ConeGeometry(0.14+noise2(x+i,y)*0.06, 0.38+noise2(y,x+i)*0.12, 6),
-        new THREE.MeshStandardMaterial({color:0x2a5528, roughness:0.9})
-      );
-      const px=(noise2(x*2+i,y)-0.5)*0.55, pz=(noise2(x,y*2+i)-0.5)*0.55;
-      trunk.position.set(px,0.17,pz); foliage.position.set(px,0.42,pz);
-      g.add(trunk); g.add(foliage);
-    }
+    const foliage=new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.45, 5), mat(0x2a5528));
+    foliage.position.set((noise2(x,y)-0.5)*0.25,0.35,(noise2(y,x)-0.5)*0.25);
+    g.add(foliage);
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
   /* ---- Wind turbine ---- */
   else if(t.type==='wind'){
     const g=new THREE.Group();
-    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.0,8), new THREE.MeshStandardMaterial({color:0xd0d8e0}));
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.0,6), mat(0xd0d8e0));
     pole.position.y=1; g.add(pole);
-    const blade=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.08,0.12), new THREE.MeshStandardMaterial({color:0xffffff}));
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.08,0.12), mat(0xffffff));
     blade.position.y=2; g.add(blade);
     g.position.set(x+0.5,elev,y+0.5); mesh=g;
   }
@@ -1048,31 +1037,27 @@ function upsertStructure(x,y){
     const w=t.type==='avenue'||t.type==='highway'||t.type==='hwybridge'?0.95:0.88;
     const deckH=bridge?0.16:0.07;
     const col=tileColor(t);
-    const deck=new THREE.Mesh(new THREE.BoxGeometry(w,deckH,w), new THREE.MeshStandardMaterial({color:col, roughness:0.92, metalness:0.05}));
+    const deck=new THREE.Mesh(new THREE.BoxGeometry(w,deckH,w), mat(col));
     deck.position.y=deckH/2; g.add(deck);
-    /* Avenue sidewalks */
     if(t.type==='avenue'){
-      const sw=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.05,w*0.98), new THREE.MeshStandardMaterial({color:0x9a9890, roughness:0.95}));
+      const sw=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.05,w*0.98), mat(0x9a9890));
       const sw2=sw.clone();
       sw.position.set(-w/2+0.06,0.06,0); sw2.position.set(w/2-0.06,0.06,0);
       g.add(sw); g.add(sw2);
     }
-    /* Highway yellow center line (simple — avoids noisy dual markings) */
     if(t.type==='highway'||t.type==='hwybridge'){
-      const mark=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.02,0.4), new THREE.MeshStandardMaterial({color:0xe8c840}));
+      const mark=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.02,0.4), mat(0xe8c840));
       mark.position.set(0,deckH+0.015,0); g.add(mark);
     }
-    /* TTC red stripe */
     if(t.type==='transit'||t.type==='transitbridge'){
-      const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.02,w*0.9), new THREE.MeshStandardMaterial({color:0xc8102e, emissive:0xc8102e, emissiveIntensity:0.1}));
+      const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.02,w*0.9), mat(0xc8102e));
       stripe.position.y=deckH+0.015; g.add(stripe);
     }
-    /* Elevated bridge piers */
     if(bridge){
       const pierH=elev;
-      const pier=new THREE.Mesh(new THREE.BoxGeometry(0.14,pierH,0.14), new THREE.MeshStandardMaterial({color:0x5a5850, roughness:0.8}));
+      const pier=new THREE.Mesh(new THREE.BoxGeometry(0.14,pierH,0.14), mat(0x5a5850));
       pier.position.set(0,-pierH/2,0); g.add(pier);
-      const cap=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.2), new THREE.MeshStandardMaterial({color:0x6a6860}));
+      const cap=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.2), mat(0x6a6860));
       cap.position.y=0.02; g.add(cap);
     }
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
@@ -1085,34 +1070,26 @@ function upsertStructure(x,y){
     const w=unbuilt?0.88:(isZone(t)?(high?0.68:0.62):0.72);
     const col=tileColor(t);
     const isTower=isZone(t)&&t.level>=3&&(high||t.landValue>65);
-    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,w), new THREE.MeshStandardMaterial({
-      color:col, roughness:isTower?0.45:0.72, metalness:isTower?0.22:0.06,
-      emissive: isTower?0x1a2030:0x000000, emissiveIntensity:isTower?0.08:0
-    }));
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,w), mat(col, unbuilt?0.45:1));
     body.position.y=h/2; g.add(body);
 
     if(isZone(t)&&t.level===1&&!high){
-      /* small house roof */
-      const roof=new THREE.Mesh(new THREE.ConeGeometry(w*0.72,0.22,4), new THREE.MeshStandardMaterial({color:0x6a4030, roughness:0.9}));
+      const roof=new THREE.Mesh(new THREE.ConeGeometry(w*0.72,0.22,4), mat(0x6a4030));
       roof.position.y=h+0.1; roof.rotation.y=Math.PI/4; g.add(roof);
     } else if(isZone(t)&&t.level===2&&!high){
-      /* brick midrise flat roof parapet */
-      const parapet=new THREE.Mesh(new THREE.BoxGeometry(w*1.02,0.08,w*1.02), new THREE.MeshStandardMaterial({color:0x7a6050}));
+      const parapet=new THREE.Mesh(new THREE.BoxGeometry(w*1.02,0.08,w*1.02), mat(0x7a6050));
       parapet.position.y=h+0.02; g.add(parapet);
     } else if(isTower){
-      /* tower crown + window grid */
-      const crown=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,0.15,w*0.5), new THREE.MeshStandardMaterial({color:0xd8dce0, metalness:0.4, roughness:0.3}));
+      const crown=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,0.15,w*0.5), mat(0xd8dce0));
       crown.position.y=h+0.08; g.add(crown);
-      addWindowEmissive(body, w, h, seasonIdx===2?0.35:0.22);
     }
 
     if(unbuilt){
-      body.material.transparent=true; body.material.opacity=0.45; body.material.color.setHex(col);
       body.scale.set(1,0.35,1); body.position.y=0.06;
     }
 
     if(t.type==='cityhall'){
-      const twin=new THREE.Mesh(new THREE.BoxGeometry(0.25,1.4,0.25), new THREE.MeshStandardMaterial({color:0x90a0b8}));
+      const twin=new THREE.Mesh(new THREE.BoxGeometry(0.25,1.4,0.25), mat(0x90a0b8));
       twin.position.set(-0.2,1.0,0); g.add(twin);
       const twin2=twin.clone(); twin2.position.x=0.2; g.add(twin2);
     }
@@ -1212,6 +1189,7 @@ function applyTool(pos){
       if(money<def.cost){flashFunds();return}
       money-=def.cost; tile.type='empty'; tile.level=0; tile.parkId=null; tile.parkName=null; tile.spec=null; tile.pollution=0;
       upsertStructure(x,y);
+      utilDirty=true; infDirty=true;
     }
     return;
   }
@@ -1241,6 +1219,7 @@ function applyTool(pos){
   tile.type=def.id; tile.level=0;
   tile.parkId=def.parkId||null; tile.parkName=def.parkName||null; tile.spec=def.spec||null;
   upsertStructure(x,y);
+  utilDirty=true; infDirty=true;
 }
 
 let insufficientFlash=0;
@@ -1278,6 +1257,7 @@ canvas.addEventListener('pointerdown',e=>{
     canvas.setPointerCapture(e.pointerId);
   }
 });
+let _inspectThrottle=0;
 canvas.addEventListener('pointermove',e=>{
   if(orbit.pointerId!=null && e.pointerId!==orbit.pointerId) return;
   if(orbit.rotating){
@@ -1292,8 +1272,12 @@ canvas.addEventListener('pointermove',e=>{
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
     return;
   }
-  const p=pickTile(e.clientX,e.clientY); hoverTile=p; updateHover(p); updateInspect(p);
+  const p=pickTile(e.clientX,e.clientY); hoverTile=p;
   if(painting&&orbit.paintingActive&&(e.buttons&1)) applyTool(p);
+  else {
+    updateHover(p);
+    if((++_inspectThrottle)%4===0) updateInspect(p);
+  }
 });
 function endPointer(e){
   if(orbit.pointerId!=null && e.pointerId!==orbit.pointerId) return;
@@ -1354,7 +1338,28 @@ function updateHover(pos){
   } else ghostMesh.visible=false;
 }
 
-/* ---- Simulation ---- */
+/* ---- Simulation (lean — one pass where possible) ---- */
+function stampInf(arr, x,y,r, val){
+  const r2=r*r;
+  for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+    if(dx*dx+dy*dy>r2) continue;
+    const nx=x+dx, ny=y+dy;
+    if(!inBounds(nx,ny)) continue;
+    const i=nx*ROWS+ny;
+    if(arr[i]<val) arr[i]=val;
+  }
+}
+function refreshInfluence(){
+  eduInf.fill(0); parkInf.fill(0);
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const def=toolById[grid[x][y].type];
+    if(!def) continue;
+    if(def.svc==='edu') stampInf(eduInf,x,y,def.radius||8,1);
+    if(def.park) stampInf(parkInf,x,y,def.radius||5,1);
+  }
+  infDirty=false;
+}
+
 function recomputeUtilities(){
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){grid[x][y].powered=false;grid[x][y].watered=false}
   const pSrc=[], wSrc=[];
@@ -1363,21 +1368,32 @@ function recomputeUtilities(){
     if(def&&def.power) pSrc.push([x,y]);
     if(def&&def.water) wSrc.push([x,y]);
   }
-  flood(pSrc,'powered',32); flood(wSrc,'watered',30);
+  flood(pSrc,'powered',28); flood(wSrc,'watered',26);
+  utilDirty=false;
 }
 function flood(sources,flag,maxD){
-  const q=[], dist=Array.from({length:COLS},()=>Array(ROWS).fill(Infinity));
-  for(const [sx,sy] of sources){dist[sx][sy]=0;q.push([sx,sy]);grid[sx][sy][flag]=true}
+  if(!sources.length) return;
+  const q=[];
+  const seen=new Int32Array(COLS*ROWS);
+  const stamp=day+1+(flag==='powered'?100000:200000);
+  for(const [sx,sy] of sources){
+    const si=sx*ROWS+sy; seen[si]=stamp; q.push(sx,sy,0); grid[sx][sy][flag]=true;
+  }
   let qi=0;
   while(qi<q.length){
-    const [x,y]=q[qi++]; const d=dist[x][y]; if(d>=maxD) continue;
-    for(const [nx,ny] of neighbors4(x,y)){
+    const x=q[qi++], y=q[qi++], d=q[qi++];
+    if(d>=maxD) continue;
+    const nbs=neighbors4(x,y);
+    for(let i=0;i<nbs.length;i++){
+      const nx=nbs[i][0], ny=nbs[i][1];
       const t=grid[nx][ny];
       if(t.terrain==='water'&&!isRoad(t)) continue;
-      const ok=isRoad(t)||isZone(t)||t.type==='empty'||toolById[t.type];
-      if(!ok) continue;
-      const nd=d+(isRoad(t)?1:1.5);
-      if(nd<dist[nx][ny]&&nd<=maxD){dist[nx][ny]=nd;t[flag]=true;q.push([nx,ny])}
+      if(!(isRoad(t)||isZone(t)||t.type==='empty'||toolById[t.type])) continue;
+      const ni=nx*ROWS+ny;
+      if(seen[ni]===stamp) continue;
+      seen[ni]=stamp;
+      const nd=d+(isRoad(t)?1:2);
+      if(nd<=maxD){ t[flag]=true; q.push(nx,ny,nd); }
     }
   }
 }
@@ -1390,30 +1406,31 @@ function tick(){
   if(seasonIdx!==prev){
     log(`${SEASONS[seasonIdx]} arrives.`,true);
     applySeasonLook();
-    /* Tint ground only — do NOT rebuild structures (that caused flicker) */
     refreshGroundInstances();
   }
-  recomputeUtilities();
+  if(utilDirty) recomputeUtilities();
+  if(infDirty || day%25===0) refreshInfluence();
 
   let pop=0,jb=0,pCap=0,wCap=0,wasteC=0;
   let svc={police:0,fire:0,health:0,edu:0,park:0};
   let roads=0, pollSum=0,pollN=0;
   const grew=[];
+  const zones=[];
+  const doPollution=(day%4===0);
 
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y]; const def=toolById[t.type];
-    t.pollution=Math.max(0,t.pollution*0.92-0.35);
-    if(isZone(t)&&t.level>0){
-      if(def.zone==='res') pop+=t.level*(def.density==='high'?28:16);
-      else if(def.zone==='com') jb+=t.level*(def.density==='high'?20:12)+(def.spec==='tourism'?4:0);
-      else if(def.zone==='off') jb+=t.level*22;
-      else if(def.zone==='ind'){
-        jb+=t.level*(def.spec==='farm'?10:14);
-        if(t.level>0&&(!def.spec||def.spec==='oil'||def.spec==='ore'||!def.spec)){
-          for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++){
-            if(!inBounds(x+dx,y+dy)) continue;
-            const fall=1-Math.hypot(dx,dy)/4;
-            if(fall>0) grid[x+dx][y+dy].pollution=Math.min(100,grid[x+dx][y+dy].pollution+t.level*2*fall*(def.spec==='oil'?1.5:1));
+    if(doPollution) t.pollution=Math.max(0,t.pollution*0.85-0.5);
+    if(isZone(t)){
+      zones.push(x,y);
+      if(t.level>0){
+        if(def.zone==='res') pop+=t.level*(def.density==='high'?28:16);
+        else if(def.zone==='com') jb+=t.level*(def.density==='high'?20:12)+(def.spec==='tourism'?4:0);
+        else if(def.zone==='off') jb+=t.level*22;
+        else if(def.zone==='ind'){
+          jb+=t.level*(def.spec==='farm'?10:14);
+          if(doPollution && t.level>0 && def.spec!=='farm' && def.spec!=='forest'){
+            for(const [a,b] of neighbors4(x,y)) grid[a][b].pollution=Math.min(100,grid[a][b].pollution+t.level*1.2);
           }
         }
       }
@@ -1421,7 +1438,6 @@ function tick(){
     if(def&&def.power) pCap+=def.power;
     if(def&&def.water) wCap+=def.water;
     if(def&&def.waste) wasteC+=def.waste;
-    if(def&&def.pollute) for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++) if(inBounds(x+dx,y+dy)) grid[x+dx][y+dy].pollution=Math.min(100,grid[x+dx][y+dy].pollution+1.5);
     if(def&&def.jobs) jb+=def.jobs;
     if(def&&def.svc) svc[def.svc]=(svc[def.svc]||0)+1;
     if(def&&def.park) svc.park++;
@@ -1438,17 +1454,6 @@ function tick(){
   avgPollution=pollN?pollSum/pollN:0;
   unemployment=population<15?0:clamp((1-jobs/Math.max(population,1))*100,0,100);
 
-  // traffic
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(isRoad(grid[x][y])) grid[x][y].traffic=Math.max(0,grid[x][y].traffic*0.7);
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y]; if(!isZone(t)||!t.level) continue;
-    for(const [a,b] of neighbors4(x,y)) if(isRoad(grid[a][b])){
-      grid[a][b].traffic=Math.min(100,grid[a][b].traffic+t.level*2);
-    }
-  }
-  /* Skip frequent road mesh rebuilds — traffic tint is cosmetic only */
-
-  // demand
   const jobRatio=jobs/Math.max(population,1), popRatio=population/Math.max(jobs,1);
   demand.r=clamp(28+(jobRatio-0.8)*50-taxRates.res*160+(happiness-50)*0.4, -100,100);
   demand.c=clamp(12+(popRatio-0.7)*45-taxRates.com*150, -100,100);
@@ -1456,10 +1461,9 @@ function tick(){
   demand.o=clamp(10+(popRatio-0.75)*40-taxRates.com*120, -100,100);
   if(population===0&&jobs===0){demand.r=40;demand.c=22;demand.i=25;demand.o=15}
 
-  // GROWTH — road → level 1; power+water → higher
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y]; if(!isZone(t)) continue;
-    const def=toolById[t.type];
+  for(let zi=0;zi<zones.length;zi+=2){
+    const x=zones[zi], y=zones[zi+1];
+    const t=grid[x][y]; const def=toolById[t.type];
     const road=hasRoadAccess(x,y);
     const powered=t.powered&&powerRatio>0.4;
     const watered=t.watered&&waterRatio>0.4;
@@ -1468,25 +1472,21 @@ function tick(){
     let cap=1;
     if(def.density==='high'){ cap=def.zone==='res'?5:4; if(t.landValue>50) cap=Math.min(5,cap+1) }
     else { if(t.landValue>45) cap=2; if(t.landValue>65) cap=3; if(t.landValue>80) cap=4 }
-    if(nearType(x,y,'university',14)||nearType(x,y,'school',7)||nearType(x,y,'highschool',9)) cap=Math.min(5,cap+1);
+    if(eduInf[x*ROWS+y]>0) cap=Math.min(5,cap+1);
     if(t.pollution>55&&def.zone==='res') cap=Math.min(cap,2);
     t.densityCap=cap;
 
     const prevL=t.level;
-    // Level 1 with road only (construction) — faster early game
     if(road && t.level===0 && d>-10){
       const early=population<80?1.85:1;
       const chance=(0.18+(d/100)*0.22)*early*(gameSettings.growthMult||1);
       if(Math.random()<chance) t.level=1;
-    }
-    // Higher levels need power+water
-    else if(road && powered && watered && t.level>0 && t.level<cap && d>0){
+    } else if(road && powered && watered && t.level>0 && t.level<cap && d>0){
       let chance=(0.06+(d/100)*0.12+(t.landValue/100)*0.04)*(gameSettings.growthMult||1);
       if(population<120) chance*=1.45;
-      if(nearPark(x,y,6)&&def.zone==='res') chance*=1.3;
+      if(parkInf[x*ROWS+y]>0&&def.zone==='res') chance*=1.25;
       if(Math.random()<chance) t.level++;
-    }
-    else if(t.level>0){
+    } else if(t.level>0){
       let decay=0;
       if(!road) decay+=0.04;
       if(t.level>=2&&(!powered||!watered)) decay+=0.025;
@@ -1497,8 +1497,7 @@ function tick(){
   }
   for(const [x,y] of grew) upsertStructure(x,y);
 
-  if(day%12===0) refreshLandValue();
-  // happiness
+  if(day%40===0) refreshLandValue();
   const svcScore=(svc.police*40+svc.fire*35+(svc.health||0)*50+(svc.edu||0)*40+svc.park*22)/Math.max(population+jobs,50);
   const taxB=(taxRates.res+taxRates.com+taxRates.ind)/3*100;
   const target=clamp(40+clamp(svcScore,0,35)+(powerRatio-1)*20+(waterRatio-1)*15+(wasteRatio-1)*12-taxB*0.5-unemployment*0.2-avgPollution*0.18,0,100);
@@ -1514,19 +1513,17 @@ function tick(){
 }
 
 function refreshLandValue(){
-  const dtx=Math.floor(COLS*0.48), dty=Math.floor(ROWS*0.72);
+  const dtx=COLS*0.48, dty=ROWS*0.72;
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y]; if(t.terrain!=='land') continue;
     let v=28+Math.max(0,22-Math.hypot(x-dtx,y-dty)*0.9);
-    if(nearTerrain(x,y,'water',4)) v+=14;
-    if(nearPark(x,y,6)) v+=12;
-    if(nearType(x,y,'highway',3)||nearType(x,y,'hwybridge',3)) v+=4;
-    if(t.pollution>30) v-=t.pollution*0.18;
-    if(nearType(x,y,'university',10)||nearType(x,y,'school',6)) v+=6;
+    if(y>ROWS-12) v+=12;
+    if(eduInf[x*ROWS+y]>0) v+=6;
+    if(parkInf[x*ROWS+y]>0) v+=10;
+    if(t.pollution>30) v-=t.pollution*0.15;
     t.landValue=clamp(Math.round(v),5,100);
   }
-  /* Soft ground tint update — no mesh dispose */
-  refreshGroundInstances();
+  /* skip ground refresh every land-value pass — only on season */
 }
 
 function runBudget(svc,roads){
@@ -1598,7 +1595,7 @@ function setSpeed(s){
   document.getElementById('btn-normal').classList.toggle('active',s===1);
   document.getElementById('btn-fast').classList.toggle('active',s===2);
   if(tickHandle) clearInterval(tickHandle);
-  if(s>0) tickHandle=setInterval(tick, s===1?320:90);
+  if(s>0) tickHandle=setInterval(tick, s===1?500:200);
 }
 document.getElementById('btn-pause').onclick=()=>setSpeed(0);
 document.getElementById('btn-normal').onclick=()=>setSpeed(1);
@@ -1658,7 +1655,8 @@ function applyNewGame(settings){
     const modeName=(MODE_PRESETS[gameSettings.mode]||MODE_PRESETS.classic).label;
     log(modeName+' mode — '+(gameSettings.with401!==false?'Highway 401 is ready.':'Empty shoreline. Lay your first roads.'));
   }
-  worldDirty=true; structuresDirty=true; applySeasonLook(); recomputeUtilities(); updateUI(1,1,1); setSpeed(1);
+  worldDirty=true; structuresDirty=true; utilDirty=true; infDirty=true;
+  applySeasonLook(); recomputeUtilities(); updateUI(1,1,1); setSpeed(1);
   const guideEl=document.getElementById('guide');
   if(guideEl){
     if(gameSettings.guide && !gameSettings.continueSave) guideEl.classList.remove('hidden');
@@ -1672,6 +1670,9 @@ function resize(){const w=wrap.clientWidth,h=wrap.clientHeight; camera.aspect=w/
 window.addEventListener('resize',resize); resize(); updateCamera();
 
 function projectLabels(){
+  const key=orbit.goal.theta.toFixed(2)+'|'+orbit.goal.phi.toFixed(2)+'|'+orbit.goal.radius.toFixed(1)+'|'+orbit.target.x.toFixed(0)+'|'+orbit.target.z.toFixed(0);
+  if(key===_labelCamKey) return;
+  _labelCamKey=key;
   const w=wrap.clientWidth,h=wrap.clientHeight;
   const hide=orbit.goal.radius>70;
   for(const el of labelEls){
@@ -1692,10 +1693,6 @@ function animate(){
   const dt=Math.min(0.05,(now-_camLastT)*0.001);
   _camLastT=now;
   stepCamera(dt);
-  const t=now*0.001;
-  /* Gentle water shimmer (material only — no mesh recreate) */
-  const pulse=0.5+0.5*Math.sin(t*0.7);
-  waterMat.emissiveIntensity=0.12+pulse*0.05;
   if(insufficientFlash>0){renderer.setClearColor(0x3a1520);insufficientFlash--; if(insufficientFlash===0) applySeasonLook();}
   renderer.render(scene,camera); projectLabels();
 }
