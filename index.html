@@ -725,6 +725,11 @@ gameSettings=settings;
 const GTA=window.GTA_GEO;
 if(!GTA||!GTA.maskB64){ showBootError('Missing gta-geo.js — true-scale map data failed to load.'); return; }
 const COLS=GTA.cols|0, ROWS=GTA.rows|0, CELL=1;
+const CELL_M=Math.max(8, Number(GTA.cellM)||64);
+const CELL_COUNT=COLS*ROWS;
+const LARGE_MAP=CELL_COUNT>180000;
+/* Scale gameplay radii from legacy ~966 m cells toward lot scale */
+const SCALE=clamp(966/CELL_M, 1, 24);
 const SEASONS=['Spring','Summer','Fall','Winter'];
 const DAYS=90;
 
@@ -859,6 +864,9 @@ function noise2(x,y){const n=Math.sin(x*12.9898+y*78.233)*43758.5453;return n-Ma
 
 /* ---- State ---- */
 let grid=[], landmarks=[];
+let terrainMask=null;
+const tileMap=new Map(); /* sparse built / mutated cells when LARGE_MAP */
+let activeTiles=[]; /* list of keys with type!==empty for sim */
 let money=55000, day=0, year=1, seasonIdx=0, speed=1;
 let taxRates={res:0.09,com:0.10,ind:0.08};
 let selectedTool='road', selectedCat='roads';
@@ -877,11 +885,12 @@ let hoverTile=null, painting=false;
 let worldDirty=true, structuresDirty=true, utilDirty=true;
 let labelEls=[];
 let _labelCamKey='';
-const eduInf=new Float32Array(COLS*ROWS);
-const parkInf=new Float32Array(COLS*ROWS);
-const fireInf=new Float32Array(COLS*ROWS);
-const policeInf=new Float32Array(COLS*ROWS);
-const healthInf=new Float32Array(COLS*ROWS);
+const eduInf=LARGE_MAP?null:new Float32Array(COLS*ROWS);
+const parkInf=LARGE_MAP?null:new Float32Array(COLS*ROWS);
+const fireInf=LARGE_MAP?null:new Float32Array(COLS*ROWS);
+const policeInf=LARGE_MAP?null:new Float32Array(COLS*ROWS);
+const healthInf=LARGE_MAP?null:new Float32Array(COLS*ROWS);
+const infSparse=LARGE_MAP?{edu:new Map(),park:new Map(),fire:new Map(),police:new Map(),health:new Map()}:null;
 let infDirty=true;
 let tutorialStep=0;
 let tutorialActive=!!gameSettings.guide && !gameSettings.continueSave;
@@ -1205,93 +1214,187 @@ function rebuildLabelDom(){
    y: north→south  inland → Lake Ontario
    Cells are equal metres (no cartoon stretch). Fake islands removed.
 */
-function decodeGtaMask(){
-  const bin=atob(GTA.maskB64);
-  const out=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
-  return out;
+function tileKey(x,y){ return x*ROWS+y; }
+function maskCode(x,y){ return terrainMask ? (terrainMask[tileKey(x,y)]|0) : 0; }
+function terrainFromCode(code){
+  if(code===1) return 'water';
+  if(code===2) return 'ravine';
+  if(code===4) return 'void';
+  return 'land'; /* 0 land, 3 island→land+flag */
 }
-function shoreYAt(x){
-  /* First water cell from north in column x — for elevation / 401 hints */
+let shoreAtCache=null;
+function shoreYAtRaw(x){
   for(let y=0;y<ROWS;y++){
-    const t=grid[x][y].terrain;
-    if(t==='water') return y;
+    if(maskCode(x,y)===1) return y;
   }
   return ROWS-1;
+}
+function shoreYAt(x){
+  if(shoreAtCache) return shoreAtCache[x];
+  return shoreYAtRaw(x);
 }
 function geoLabel(name, fallbackX, fallbackY){
   const hit=(GTA.labels||[]).find(l=>l.name===name);
   if(hit) return [hit.x|0, hit.y|0, name];
   return [fallbackX, fallbackY, name];
 }
-
-function makeTerrain(){
-  grid=[]; landmarks=[];
-  const mask=decodeGtaMask();
-  if(mask.length!==COLS*ROWS){
-    console.error('GTA mask size mismatch', mask.length, COLS*ROWS);
+function computeElev(x,y,code,shore){
+  if(code===4) return -2;
+  if(code===1) return -0.55;
+  if(code===2) return -0.42;
+  if(code===3) return 0.06;
+  const distShore=Math.max(0, shore-y);
+  let elev=0.04+Math.min(0.38, distShore*0.012*(CELL_M/96));
+  if(x<COLS*0.14 && y>ROWS*0.55) elev+=0.10+noise2(x,y)*0.04;
+  if(x>COLS*0.58 && x<COLS*0.72 && distShore<=Math.max(2, Math.round(4*SCALE/8)) && distShore>=0) elev=Math.max(elev, 0.30);
+  elev+=(noise2(x*0.17,y*0.19)-0.5)*0.05;
+  return elev;
+}
+function computeLandValue(x,y,code,dtx,dty){
+  if(code===1) return 0;
+  if(code===3) return 56;
+  const distCell=Math.hypot(x-dtx,y-dty)/(SCALE*0.35);
+  let v=28+Math.max(0,42-distCell*1.2);
+  if(y<ROWS*0.25) v-=5;
+  if(x<COLS*0.15) v-=4;
+  if(x>COLS*0.78) v-=3;
+  return clamp(Math.round(v+noise2(x,y)*8),15,95);
+}
+function makeCell(x,y){
+  const code=maskCode(x,y);
+  const isWater=code===1, isRav=code===2, isIsland=code===3, isVoid=code===4;
+  const shore=shoreYAt(x);
+  return {
+    terrain:terrainFromCode(code),
+    type:'empty',level:0,
+    landValue:isWater||isVoid?0:computeLandValue(x,y,code,cityCenter.x,cityCenter.y),
+    pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,
+    parkId:null,parkName:null,spec:null,
+    island:isIsland,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false,
+    elev:computeElev(x,y,code,shore)
+  };
+}
+function ensureTile(x,y){
+  const k=tileKey(x,y);
+  let t=tileMap.get(k);
+  if(!t){
+    t=makeCell(x,y);
+    tileMap.set(k,t);
   }
-  for(let x=0;x<COLS;x++){grid[x]=[];for(let y=0;y<ROWS;y++){
-    const code=mask[x*ROWS+y]|0; /* 0 land, 1 water, 2 ravine, 3 island */
-    const isWater=code===1;
-    const isRav=code===2;
-    const isIsland=code===3;
-    grid[x][y]={
-      terrain:isWater?'water':(isRav?'ravine':'land'),
-      type:'empty',level:0,landValue:isWater?0:(isIsland?56:40),
-      pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,
-      parkId:null,parkName:null,spec:null,
-      island:isIsland,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false,
-      elev:isWater?-0.55:(isRav?-0.42:(isIsland?0.06:0))
-    };
-  }}
-
-  const shoreAt=[];
-  for(let x=0;x<COLS;x++) shoreAt[x]=shoreYAt(x);
-
-  const dt=geoLabel('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.42));
-  const dtx=dt[0], dty=dt[1];
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y];
-    if(t.terrain==='water'){ t.elev=-0.55; continue; }
-    if(t.terrain==='ravine'){ t.elev=-0.42; continue; }
-    if(t.island){ t.elev=0.06; continue; }
-    const shore=shoreAt[x];
-    const distShore=Math.max(0, shore-y);
-    let elev=0.04+Math.min(0.38, distShore*0.012);
-    /* Niagara Escarpment hint — western inland rise (Hamilton–Burlington) */
-    if(x<COLS*0.14 && y>ROWS*0.55) elev+=0.10+noise2(x,y)*0.04;
-    /* Scarborough Bluffs: high land near eastern Toronto shore */
-    if(x>COLS*0.58 && x<COLS*0.72 && distShore<=4 && distShore>=0) elev=Math.max(elev, 0.30);
-    elev+=(noise2(x*0.17,y*0.19)-0.5)*0.05;
-    t.elev=elev;
-    let v=28+Math.max(0,42-Math.hypot(x-dtx,y-dty)*1.2);
-    if(nearTerrain(x,y,'water',3)) v+=16;
-    if(nearTerrain(x,y,'ravine',2)) v+=7;
-    if(y<ROWS*0.25) v-=5;
-    if(x<COLS*0.15) v-=4;
-    if(x>COLS*0.78) v-=3;
-    if(t.island) v=56;
-    t.landValue=clamp(Math.round(v+noise2(x,y)*8),15,95);
+  return t;
+}
+function rebuildActiveTiles(){
+  activeTiles.length=0;
+  if(LARGE_MAP){
+    for(const [k,t] of tileMap){ if(t.type!=='empty') activeTiles.push(k); }
+  } else {
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(grid[x][y].type!=='empty') activeTiles.push(tileKey(x,y));
   }
-
-  /* Highway 401 — place near real ~43.75N corridor label */
-  const hwy=geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.28));
-  const y401=clamp(hwy[1]|0, 2, ROWS-3);
-  if(gameSettings.with401!==false){
-    for(let x=0;x<COLS;x++){
-      const cell=grid[x][y401];
-      if(cell.terrain==='ravine'||cell.terrain==='water') cell.type='hwybridge';
-      else if(cell.terrain==='land') cell.type='highway';
-      cell.level=0;
+}
+function forEachActive(fn){
+  if(LARGE_MAP){
+    for(const [k,t] of tileMap){
+      if(t.type==='empty' && !t.burning && !t.flooded) continue;
+      fn((k/ROWS)|0, k%ROWS, t);
+    }
+  } else {
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+      const t=grid[x][y];
+      if(t.type==='empty' && !t.burning && !t.flooded) continue;
+      fn(x,y,t);
     }
   }
-  cityCenter={x:dtx, y:dty};
-  placeLabels(y401);
+}
+
+function makeTerrain(){
+  landmarks=[];
+  tileMap.clear();
+  activeTiles.length=0;
+  terrainMask=decodeGtaMask();
+  if(terrainMask.length!==COLS*ROWS){
+    console.error('GTA mask size mismatch', terrainMask.length, COLS*ROWS);
+  }
+  shoreAtCache=new Int16Array(COLS);
+  for(let x=0;x<COLS;x++) shoreAtCache[x]=shoreYAtRaw(x);
+
+  const dt=geoLabel('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.55));
+  cityCenter={x:dt[0], y:dt[1]};
+
+  if(LARGE_MAP){
+    grid=[];
+    for(let x=0;x<COLS;x++){
+      const xi=x;
+      grid[x]=new Proxy({},{
+        get(_, prop){
+          if(prop==='length') return ROWS;
+          const y=+prop;
+          if(y!==y || y<0 || y>=ROWS) return undefined;
+          return ensureTile(xi,y);
+        },
+        set(_, prop, val){
+          const y=+prop;
+          tileMap.set(tileKey(xi,y), val);
+          return true;
+        }
+      });
+    }
+  } else {
+    grid=[];
+    for(let x=0;x<COLS;x++){
+      grid[x]=[];
+      for(let y=0;y<ROWS;y++){
+        const t=makeCell(x,y);
+        grid[x][y]=t;
+        tileMap.set(tileKey(x,y), t);
+      }
+    }
+  }
+
+  /* Highway 401 — real OSM corridor cells when baked; else lat spine fallback */
+  if(gameSettings.with401!==false){
+    const hwyCells=GTA.hwy401;
+    if(hwyCells && hwyCells.length){
+      for(let i=0;i<hwyCells.length;i++){
+        const id=hwyCells[i]|0;
+        const x=(id/ROWS)|0, y=id%ROWS;
+        if(!inBounds(x,y)) continue;
+        const cell=ensureTile(x,y);
+        if(cell.terrain==='ravine'||cell.terrain==='water') cell.type='hwybridge';
+        else if(isBuildableTerrain(cell)) cell.type='highway';
+        cell.level=0;
+      }
+    } else {
+      const hwy=geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.35));
+      const y401=clamp(hwy[1]|0, 2, ROWS-3);
+      for(let x=0;x<COLS;x++){
+        const cell=ensureTile(x,y401);
+        if(cell.terrain==='ravine'||cell.terrain==='water') cell.type='hwybridge';
+        else if(isBuildableTerrain(cell)) cell.type='highway';
+        cell.level=0;
+      }
+    }
+  }
+  const hwyLbl=geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.35));
+  placeLabels(hwyLbl[1]|0);
+  rebuildActiveTiles();
   worldDirty=true; structuresDirty=true;
 }
 
+function decodeGtaMask(){
+  const bin=atob(GTA.maskB64);
+  const out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+
 function placeLabels(y401){
+  const fromGeo=(GTA.labels||[]).map(l=>({x:l.x|0,y:l.y|0,name:l.name}));
+  if(fromGeo.length){
+    landmarks=fromGeo.filter(l=>inBounds(l.x,l.y));
+    if(gameSettings.with401===false) landmarks=landmarks.filter(l=>l.name!=='Highway 401');
+    rebuildLabelDom();
+    return;
+  }
   const L=(name,fx,fy)=>geoLabel(name, fx, fy);
   landmarks=[
     gameSettings.with401!==false ? [Math.floor(COLS*0.48), y401, 'Highway 401'] : null,
@@ -1299,10 +1402,14 @@ function placeLabels(y401){
     L('Burlington', Math.floor(COLS*0.12), Math.floor(ROWS*0.88)),
     L('Oakville', Math.floor(COLS*0.22), Math.floor(ROWS*0.70)),
     L('Mississauga', Math.floor(COLS*0.26), Math.floor(ROWS*0.50)),
+    L('Brampton', Math.floor(COLS*0.20), Math.floor(ROWS*0.42)),
     L('Etobicoke', Math.floor(COLS*0.35), Math.floor(ROWS*0.45)),
     L('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.42)),
     L('Toronto Islands', Math.floor(COLS*0.49), Math.floor(ROWS*0.46)),
     L('North York', Math.floor(COLS*0.47), Math.floor(ROWS*0.26)),
+    L('Vaughan', Math.floor(COLS*0.40), Math.floor(ROWS*0.18)),
+    L('Richmond Hill', Math.floor(COLS*0.44), Math.floor(ROWS*0.12)),
+    L('Markham', Math.floor(COLS*0.52), Math.floor(ROWS*0.14)),
     L('Scarborough', Math.floor(COLS*0.62), Math.floor(ROWS*0.30)),
     L('Pickering', Math.floor(COLS*0.74), Math.floor(ROWS*0.15)),
     L('Ajax', Math.floor(COLS*0.80), Math.floor(ROWS*0.14)),
@@ -1314,7 +1421,15 @@ function placeLabels(y401){
 }
 
 function nearTerrain(x,y,t,r){
-  for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++) if(inBounds(x+dx,y+dy)&&grid[x+dx][y+dy].terrain===t) return true;
+  for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+    if(!inBounds(x+dx,y+dy)) continue;
+    const code=maskCode(x+dx,y+dy);
+    const ter=terrainFromCode(code);
+    if(t==='water' && code===1) return true;
+    if(t==='ravine' && code===2) return true;
+    if(t==='land' && (code===0||code===3||code===2)) return true;
+    if(ter===t) return true;
+  }
   return false;
 }
 function nearType(x,y,type,r){
@@ -1361,12 +1476,14 @@ renderer.toneMappingExposure=1.15;
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x3a6a7a);
-scene.fog=new THREE.FogExp2(0x4a7a88, 0.0011);
-const camera=new THREE.PerspectiveCamera(42,1,0.1,500);
-/* Start overlooking downtown / harbour (true lat positions from GTA_GEO) */
-const _dtCam=geoLabel('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.42));
-const y401cam=clamp((geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.28))[1])|0, 2, ROWS-3);
-camera.position.set(_dtCam[0], 48, y401cam - 14);
+scene.fog=new THREE.FogExp2(0x4a7a88, LARGE_MAP?0.00035:0.0011);
+const camera=new THREE.PerspectiveCamera(42,1,0.1, Math.max(500, Math.hypot(COLS,ROWS)*1.4));
+/* Start overlooking downtown / 401 corridor */
+const _dtCam=geoLabel('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.55));
+const y401cam=clamp((geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.35))[1])|0, 2, ROWS-3);
+const _camH=LARGE_MAP?Math.min(120, 28+SCALE*2.2):48;
+const _camBack=LARGE_MAP?Math.min(80, 10+SCALE*1.1):14;
+camera.position.set(_dtCam[0], _camH, y401cam - _camBack);
 
 const ORBIT_DEG=Math.PI/180;
 const _orbitLook=_dtCam[1];
@@ -1381,12 +1498,13 @@ const orbit={
   rmbDrag:0,
   rotateSpeed:0.0052,
   tiltSpeed:0.0042,
-  panFactor:0.0014,
-  keyPanFactor:0.52,
-  edgePanFactor:0.42,
+  panFactor:LARGE_MAP?0.0022:0.0014,
+  keyPanFactor:LARGE_MAP?0.85:0.52,
+  edgePanFactor:LARGE_MAP?0.7:0.42,
   dampOrbit:15,
   dampTarget:18,
-  minR:10, maxR:95,
+  minR:LARGE_MAP?6:10,
+  maxR:LARGE_MAP?Math.min(220, 40+SCALE*6):95,
   minPhi:18*ORBIT_DEG,
   maxPhi:82*ORBIT_DEG
 };
@@ -1441,6 +1559,7 @@ function stepCamera(dt){
   orbit.spherical.radius+=(orbit.goal.radius-orbit.spherical.radius)*sk;
   orbit.target.lerp(orbit.targetGoal, tk);
   applyOrbitToCamera();
+  if(LARGE_MAP) refreshGroundInstances();
 }
 
 function getPanAxes(){
@@ -1778,7 +1897,7 @@ function hideAgentInstance(mesh,i){
 }
 function refreshRoadList(){
   roadList=[];
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(isRoad(grid[x][y])) roadList.push(x,y);
+  forEachActive((x,y,t)=>{ if(isRoad(t)) roadList.push(x,y); });
 }
 function pickRoadNeighbor(gx,gy,fromX,fromY){
   const opts=[];
@@ -1973,19 +2092,18 @@ function nearTransit(x,y,r){
 function runTripGeneration(){
   /* Decay traffic toward zero (Micropolis traffic decay) */
   const blizzard=day<=blizzardUntil;
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y];
+  forEachActive((x,y,t)=>{
     if(isRoad(t)) t.traffic=Math.max(0, t.traffic*0.78-(fundRoads>=1?0.4:0.1)+(blizzard?2:0));
     t.tripFail=Math.max(0,(t.tripFail||0)*0.9);
-  }
+  });
 
   let ok=0, fail=0, transitOk=0;
   const origins=[];
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y], def=toolById[t.type];
-    if(!def||!t.level) continue;
+  forEachActive((x,y,t)=>{
+    const def=toolById[t.type];
+    if(!def||!t.level) return;
     if(def.zone==='res'||def.zone==='ind'||def.zone==='com'||def.zone==='off') origins.push(x,y,def.zone,t.level);
-  }
+  });
   /* Sample trips — full scan every origin is too heavy */
   const maxTrips=Math.min(48, Math.max(8, (origins.length/4)|0));
   const strike=day<=strikeUntil;
@@ -2021,10 +2139,10 @@ function runTripGeneration(){
   }
 
   let sum=0, nRoad=0;
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    if(!isRoad(grid[x][y])) continue;
-    sum+=grid[x][y].traffic; nRoad++;
-  }
+  forEachActive((x,y,t)=>{
+    if(!isRoad(t)) return;
+    sum+=t.traffic; nRoad++;
+  });
   avgTraffic=nRoad?sum/nRoad:0;
   const total=ok+fail;
   if(total>0){
@@ -2071,31 +2189,29 @@ function updateRCIValves(jobsResCapable){
 function updateCrimeMap(svc){
   let sum=0, n=0;
   const policePower=(svc.police||0)*fundPolice;
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y];
-    if(t.terrain!=='land'){ t.crime=0; continue; }
+  forEachActive((x,y,t)=>{
+    if(t.terrain==='water'||t.terrain==='void'){ t.crime=0; return; }
     const dens=isZone(t)&&t.level>0?t.level:0;
     const cover=policePower>0?clamp(policePower*18/(1+Math.hypot(x-cityCenter.x,y-cityCenter.y)*0.15),0,1):0;
-    /* police stations also stamp local coverage */
-    let local=cover;
-    if(eduInf){ /* reuse nearby svc via distance to police tiles — cheap approx */ }
-    t.crime=clamp(dens*12*(1-local*0.85)*(1-t.landValue/140)+avgTraffic*0.04, 0, 100);
-    if(t.terrain==='land'){ sum+=t.crime; n++; }
-  }
-  /* boost coverage near actual police */
+    t.crime=clamp(dens*12*(1-cover*0.85)*(1-t.landValue/140)+avgTraffic*0.04, 0, 100);
+    sum+=t.crime; n++;
+  });
   if((svc.police||0)>0){
-    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-      if(toolById[grid[x][y].type]?.svc==='police'){
-        for(let dx=-8;dx<=8;dx++)for(let dy=-8;dy<=8;dy++){
-          const nx=x+dx, ny=y+dy;
-          if(!inBounds(nx,ny)) continue;
-          const d=Math.hypot(dx,dy); if(d>8) continue;
-          grid[nx][ny].crime=Math.max(0, grid[nx][ny].crime*(1-fundPolice*0.12*(1-d/8)));
-        }
+    forEachActive((x,y,t)=>{
+      if(toolById[t.type]?.svc!=='police') return;
+      for(let dx=-8;dx<=8;dx++)for(let dy=-8;dy<=8;dy++){
+        const nx=x+dx, ny=y+dy;
+        if(!inBounds(nx,ny)) continue;
+        const d=Math.hypot(dx,dy); if(d>8) continue;
+        const nt=grid[nx][ny];
+        nt.crime=Math.max(0, nt.crime*(1-fundPolice*0.12*(1-d/8)));
       }
-    }
+    });
     sum=0; n=0;
-    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(grid[x][y].terrain==='land'){sum+=grid[x][y].crime;n++}
+    forEachActive((x,y,t)=>{
+      if(t.terrain==='water'||t.terrain==='void') return;
+      sum+=t.crime; n++;
+    });
   }
   avgCrime=n?sum/n:0;
 }
@@ -2182,10 +2298,12 @@ function roadDeckElev(x,y,t){
   return elev;
 }
 
+const CHUNK=48;
+let groundChunkKey='';
+let groundPool=null;
+
 function rebuildGround(){
   if(!groundMesh){
-    /* Lit Lambert, one material per terrain class — NO vertexColors / setColorAt
-       (that combo painted the map black when instance colors were uninitialized) */
     const landMat=new THREE.MeshLambertMaterial({color:0x6e8f5a, emissive:0x1a2814, emissiveIntensity:0.1});
     const shoreMat=new THREE.MeshLambertMaterial({color:0x8a9078, emissive:0x202418, emissiveIntensity:0.08});
     const urbanMat=new THREE.MeshLambertMaterial({color:0x7a7e78, emissive:0x181818, emissiveIntensity:0.08});
@@ -2199,60 +2317,70 @@ function rebuildGround(){
       shininess:36, specular:0x55a0b0, transparent:true, opacity:0.9
     });
     const tileGeo=new THREE.BoxGeometry(0.98,1,0.98);
-    groundMesh=new THREE.InstancedMesh(tileGeo, landMat, COLS*ROWS);
-    groundShoreMesh=new THREE.InstancedMesh(tileGeo, shoreMat, COLS*ROWS);
-    groundUrbanMesh=new THREE.InstancedMesh(tileGeo, urbanMat, COLS*ROWS);
-    groundIslandMesh=new THREE.InstancedMesh(tileGeo, islandMat, COLS*ROWS);
-    groundWaterMesh=new THREE.InstancedMesh(tileGeo, waterTileMat, COLS*ROWS);
-    groundRavineMesh=new THREE.InstancedMesh(tileGeo, ravMat, COLS*ROWS);
+    const cap=LARGE_MAP ? (CHUNK*2+1)*(CHUNK*2+1) : COLS*ROWS;
+    groundMesh=new THREE.InstancedMesh(tileGeo, landMat, cap);
+    groundShoreMesh=new THREE.InstancedMesh(tileGeo, shoreMat, cap);
+    groundUrbanMesh=new THREE.InstancedMesh(tileGeo, urbanMat, cap);
+    groundIslandMesh=new THREE.InstancedMesh(tileGeo, islandMat, cap);
+    groundWaterMesh=new THREE.InstancedMesh(tileGeo, waterTileMat, cap);
+    groundRavineMesh=new THREE.InstancedMesh(tileGeo, ravMat, cap);
     [groundMesh,groundShoreMesh,groundUrbanMesh,groundIslandMesh,groundWaterMesh,groundRavineMesh].forEach(m=>{
       m.frustumCulled=false; scene.add(m);
     });
+    groundPool=cap;
   }
   refreshGroundInstances();
 }
 
-/* Update ground in place — never dispose/recreate (stops map flicker) */
+/* Update ground in place — chunked on large maps so VRAM stays sane */
 function refreshGroundInstances(){
   if(!groundMesh) return;
+  let x0=0, x1=COLS-1, y0=0, y1=ROWS-1;
+  if(LARGE_MAP){
+    const cx=clamp(Math.floor(orbit.target.x), 0, COLS-1);
+    const cy=clamp(Math.floor(orbit.target.z), 0, ROWS-1);
+    const r=Math.max(CHUNK, Math.floor(orbit.spherical.radius*1.1));
+    x0=Math.max(0, cx-r); x1=Math.min(COLS-1, cx+r);
+    y0=Math.max(0, cy-r); y1=Math.min(ROWS-1, cy+r);
+    const key=x0+','+y0+','+x1+','+y1;
+    if(key===groundChunkKey && !worldDirty) return;
+    groundChunkKey=key;
+  }
   let iLand=0, iShore=0, iUrban=0, iIsland=0, iWater=0, iRav=0;
   const hideMat=new THREE.Matrix4().makeScale(0.001,0.001,0.001);
   hideMat.setPosition(0,-40,0);
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y];
-    const elev=t.elev||0;
-    if(t.terrain==='water'){
+  const maxInst=groundPool||COLS*ROWS;
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){
+    const code=maskCode(x,y);
+    const elev=computeElev(x,y,code,shoreYAt(x));
+    if(code===1){
       const shore=nearTerrain(x,y,'land',1)||nearTerrain(x,y,'ravine',1);
       const h=shore?0.14:0.09;
-      const y0=shore?-0.28:-0.48;
-      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-      groundWaterMesh.setMatrixAt(iWater++,_dummy.matrix);
-    } else if(t.terrain==='ravine'){
-      const h=0.14; const y0=elev-0.08; /* recessed river channel */
-      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-      groundRavineMesh.setMatrixAt(iRav++,_dummy.matrix);
-    } else if(t.island){
-      const h=0.2; const y0=0.08+elev;
-      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-      groundIslandMesh.setMatrixAt(iIsland++,_dummy.matrix);
+      const yPos=shore?-0.28:-0.48;
+      _dummy.position.set(x+0.5,yPos,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      if(iWater<maxInst) groundWaterMesh.setMatrixAt(iWater++,_dummy.matrix);
+    } else if(code===4){
+      /* deep lake / off-map — skip instances (background shows through) */
+    } else if(code===2){
+      _dummy.position.set(x+0.5,elev-0.08,y+0.5); _dummy.scale.set(1,0.14,1); _dummy.updateMatrix();
+      if(iRav<maxInst) groundRavineMesh.setMatrixAt(iRav++,_dummy.matrix);
+    } else if(code===3){
+      _dummy.position.set(x+0.5,0.08+elev,y+0.5); _dummy.scale.set(1,0.2,1); _dummy.updateMatrix();
+      if(iIsland<maxInst) groundIslandMesh.setMatrixAt(iIsland++,_dummy.matrix);
     } else if(nearTerrain(x,y,'water',1)){
-      /* Shore / bluff face — slightly thicker for cliff read */
       const bluff=x>COLS*0.60&&x<COLS*0.74;
       const h=bluff?0.28:0.16;
-      const y0=elev+(bluff?0.08:0.02);
-      _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-      groundShoreMesh.setMatrixAt(iShore++,_dummy.matrix);
-    } else if((t.landValue||40)>62){
-      const h=0.18+Math.min(0.12, elev*0.35);
-      _dummy.position.set(x+0.5, elev+0.06, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-      groundUrbanMesh.setMatrixAt(iUrban++,_dummy.matrix);
+      _dummy.position.set(x+0.5, elev+(bluff?0.08:0.02), y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      if(iShore<maxInst) groundShoreMesh.setMatrixAt(iShore++,_dummy.matrix);
     } else {
+      const lv=computeLandValue(x,y,code,cityCenter.x,cityCenter.y);
       const h=0.16+Math.min(0.14, elev*0.4);
       _dummy.position.set(x+0.5, elev+0.05, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-      groundMesh.setMatrixAt(iLand++,_dummy.matrix);
+      if(lv>62){ if(iUrban<maxInst) groundUrbanMesh.setMatrixAt(iUrban++,_dummy.matrix); }
+      else { if(iLand<maxInst) groundMesh.setMatrixAt(iLand++,_dummy.matrix); }
     }
   }
-  const hideRest=(mesh, start)=>{ while(start<COLS*ROWS) mesh.setMatrixAt(start++, hideMat); mesh.instanceMatrix.needsUpdate=true; };
+  const hideRest=(mesh, start)=>{ while(start<maxInst) mesh.setMatrixAt(start++, hideMat); mesh.instanceMatrix.needsUpdate=true; mesh.count=maxInst; };
   hideRest(groundMesh, iLand);
   hideRest(groundShoreMesh, iShore);
   hideRest(groundUrbanMesh, iUrban);
@@ -2758,7 +2886,7 @@ function upsertStructure(x,y){
 
 function rebuildAllStructures(){
   clearStructures();
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(grid[x][y].type!=='empty') upsertStructure(x,y);
+  forEachActive((x,y,t)=>{ if(t.type!=='empty') upsertStructure(x,y); });
   structuresDirty=false;
 }
 
@@ -2831,11 +2959,16 @@ function pickTile(cx,cy){
   return null;
 }
 
+function isBuildableTerrain(tile){
+  /* Ravines are recessed land — still buildable. Water/void block normal build. */
+  return !!tile && tile.terrain!=='water' && tile.terrain!=='void' && (tile.terrain==='land' || tile.terrain==='ravine' || tile.island);
+}
 function canPlace(def, tile){
-  if(!def) return false;
-  if(def.bridge) return tile.terrain==='ravine'||tile.terrain==='water'||tile.terrain==='land';
-  if(def.id==='harbor'||def.id==='ferry') return tile.terrain==='land'&&nearTerrain(arguments[2]||0,arguments[3]||0,'water',2) || tile.terrain==='land';
-  return tile.terrain==='land';
+  if(!def||!tile) return false;
+  if(def.bridge) return tile.terrain==='ravine'||tile.terrain==='water'||tile.terrain==='land'||tile.island;
+  if(def.id==='harbor'||def.id==='ferry') return isBuildableTerrain(tile);
+  if(tile.terrain==='water' && !tile.island) return false;
+  return isBuildableTerrain(tile);
 }
 
 function applyTool(pos){
@@ -2870,13 +3003,21 @@ function applyTool(pos){
     /* Bridges: ravine/water always; land only if empty or existing road */
     if(tile.terrain==='ravine'||tile.terrain==='water'){
       /* ok */
-    } else if(tile.terrain==='land'){
+    } else if(isBuildableTerrain(tile)){
       if(tile.type!=='empty'&&!isRoad(tile)) return;
     } else {
+      showToast('Cannot build here.', 'warn', 1600);
       return;
     }
   } else {
-    if(tile.terrain!=='land') return;
+    if(tile.terrain==='water' && !tile.island){
+      showToast('Need a <b>bridge</b> to cross water.', 'warn', 2000);
+      return;
+    }
+    if(!isBuildableTerrain(tile)){
+      showToast('Cannot build on water.', 'warn', 1600);
+      return;
+    }
     if(def.zone){
       if(tile.type!=='empty') return;
       if(!hasRoadAccess(x,y)){
@@ -2921,6 +3062,7 @@ function applyTool(pos){
     refreshRoadList();
   }
   utilDirty=true; infDirty=true;
+  rebuildActiveTiles();
   advanceTutorial(def.id);
   checkMilestones(def.id);
 }
@@ -3113,33 +3255,63 @@ function updateHover(pos){
   hoverMesh.visible=true; hoverMesh.position.set(pos.x+0.5,0.22,pos.y+0.5);
   const def=toolById[selectedTool];
   if(def&&selectedTool!=='query'&&selectedTool!=='bulldoze'){
+    const tile=grid[pos.x][pos.y];
+    const ok=canPlace(def, tile);
     ghostMesh.visible=true;
-    ghostMesh.material.color.set(def.color||'#fff');
+    ghostMesh.material.color.set(ok?(def.color||'#fff'):'#ff6b57');
+    ghostMesh.material.opacity=ok?0.4:0.55;
     ghostMesh.position.set(pos.x+0.5,0.5,pos.y+0.5);
   } else ghostMesh.visible=false;
 }
 
 /* ---- Simulation (lean — one pass where possible) ---- */
 function stampInf(arr, x,y,r, val){
-  const r2=r*r;
-  for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+  const rr=Math.max(2, Math.round(r * Math.min(SCALE/6, 4)));
+  const r2=rr*rr;
+  for(let dx=-rr;dx<=rr;dx++)for(let dy=-rr;dy<=rr;dy++){
     if(dx*dx+dy*dy>r2) continue;
     const nx=x+dx, ny=y+dy;
     if(!inBounds(nx,ny)) continue;
     const i=nx*ROWS+ny;
-    if(arr[i]<val) arr[i]=val;
+    if(arr instanceof Map){
+      const prev=arr.get(i)||0;
+      if(prev<val) arr.set(i,val);
+    } else if(arr[i]<val) arr[i]=val;
   }
 }
+function infAt(kind, x,y){
+  const i=x*ROWS+y;
+  if(LARGE_MAP) return infSparse[kind].get(i)||0;
+  if(kind==='edu') return eduInf[i];
+  if(kind==='park') return parkInf[i];
+  if(kind==='fire') return fireInf[i];
+  if(kind==='police') return policeInf[i];
+  if(kind==='health') return healthInf[i];
+  return 0;
+}
 function refreshInfluence(){
-  eduInf.fill(0); parkInf.fill(0); fireInf.fill(0); policeInf.fill(0); healthInf.fill(0);
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const def=toolById[grid[x][y].type];
-    if(!def) continue;
-    if(def.svc==='edu') stampInf(eduInf,x,y,def.radius||8,1);
-    if(def.svc==='police') stampInf(policeInf,x,y,def.radius||9, fundPolice);
-    if(def.svc==='fire') stampInf(fireInf,x,y,def.radius||9, fundFire);
-    if(def.svc==='health') stampInf(healthInf,x,y,def.radius||8,1);
-    if(def.park) stampInf(parkInf,x,y,def.radius||5,1);
+  if(LARGE_MAP){
+    infSparse.edu.clear(); infSparse.park.clear(); infSparse.fire.clear(); infSparse.police.clear(); infSparse.health.clear();
+    forEachActive((x,y,t)=>{
+      const def=toolById[t.type];
+      if(!def) return;
+      if(def.svc==='edu') stampInf(infSparse.edu,x,y,def.radius||8,1);
+      if(def.svc==='police') stampInf(infSparse.police,x,y,def.radius||9, fundPolice);
+      if(def.svc==='fire') stampInf(infSparse.fire,x,y,def.radius||9, fundFire);
+      if(def.svc==='health') stampInf(infSparse.health,x,y,def.radius||8,1);
+      if(def.park) stampInf(infSparse.park,x,y,def.radius||5,1);
+    });
+  } else {
+    eduInf.fill(0); parkInf.fill(0); fireInf.fill(0); policeInf.fill(0); healthInf.fill(0);
+    forEachActive((x,y,t)=>{
+      const def=toolById[t.type];
+      if(!def) return;
+      if(def.svc==='edu') stampInf(eduInf,x,y,def.radius||8,1);
+      if(def.svc==='police') stampInf(policeInf,x,y,def.radius||9, fundPolice);
+      if(def.svc==='fire') stampInf(fireInf,x,y,def.radius||9, fundFire);
+      if(def.svc==='health') stampInf(healthInf,x,y,def.radius||8,1);
+      if(def.park) stampInf(parkInf,x,y,def.radius||5,1);
+    });
   }
   infDirty=false;
 }
@@ -3155,30 +3327,30 @@ function zoneToolMaxLevel(def){
 
 /* C:S-style desirability for upgrades (0..1+) */
 function zoneDesirability(x,y,t,def){
-  const i=x*ROWS+y;
   let s=0.35+(t.landValue/100)*0.35+(happiness/100)*0.12;
-  if(parkInf[i]>0) s+=0.12;
-  if(eduInf[i]>0) s+=0.1;
-  if(policeInf[i]>0) s+=0.08;
-  if(fireInf[i]>0) s+=0.06;
-  if(healthInf[i]>0) s+=0.08;
+  if(infAt('park',x,y)>0) s+=0.12;
+  if(infAt('edu',x,y)>0) s+=0.1;
+  if(infAt('police',x,y)>0) s+=0.08;
+  if(infAt('fire',x,y)>0) s+=0.06;
+  if(infAt('health',x,y)>0) s+=0.08;
   if(nearType(x,y,'transit',3)||nearType(x,y,'metro',4)) s+=0.1;
   if(t.pollution>40 && def.zone==='res') s-=0.2;
   if((t.crime||0)>50 && def.zone==='res') s-=0.15;
-  if((t.zoneAge||0)>12) s+=0.06; /* established lots densify */
+  if((t.zoneAge||0)>12) s+=0.06;
   if((t.zoneAge||0)>30) s+=0.06;
   return clamp(s, 0.05, 1.35);
 }
 
 function recomputeUtilities(){
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){grid[x][y].powered=false;grid[x][y].watered=false}
+  forEachActive((x,y,t)=>{ t.powered=false; t.watered=false; });
   const pSrc=[], wSrc=[];
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const def=toolById[grid[x][y].type];
+  forEachActive((x,y,t)=>{
+    const def=toolById[t.type];
     if(def&&def.power) pSrc.push([x,y]);
     if(def&&def.water) wSrc.push([x,y]);
-  }
-  flood(pSrc,'powered',28); flood(wSrc,'watered',26);
+  });
+  flood(pSrc,'powered', Math.round(28*Math.min(SCALE/4, 5)));
+  flood(wSrc,'watered', Math.round(26*Math.min(SCALE/4, 5)));
   utilDirty=false;
 }
 function flood(sources,flag,maxD){
@@ -3228,8 +3400,8 @@ function tick(){
   const zones=[];
   const doPollution=(day%4===0);
 
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y]; const def=toolById[t.type];
+  forEachActive((x,y,t)=>{
+    const def=toolById[t.type];
     if(doPollution) t.pollution=Math.max(0,t.pollution*0.85-0.5);
     if(isZone(t)){
       zones.push(x,y);
@@ -3252,8 +3424,8 @@ function tick(){
     if(def&&def.svc) svc[def.svc]=(svc[def.svc]||0)+1;
     if(def&&def.park) svc.park++;
     if(isRoad(t)) roads++;
-    if(t.terrain==='land'){pollSum+=t.pollution;pollN++}
-  }
+    if(t.terrain==='land'||t.terrain==='ravine'){pollSum+=t.pollution;pollN++}
+  });
   population=pop; jobs=jb; powerCap=pCap; waterCap=wCap; wasteCap=wasteC;
   powerDemand=pop*0.5+jb*0.7+roads*0.3;
   waterDemand=pop*0.45+jb*0.35;
@@ -3303,8 +3475,8 @@ function tick(){
       if(t.landValue>38||desir>0.5) cap=2;
       if(t.landValue>58&&desir>0.7&&powered&&watered) cap=3;
     }
-    if(eduInf[idx]>0) cap=Math.min(toolMax, cap+1);
-    if(parkInf[idx]>0&&def.zone==='res') cap=Math.min(toolMax, Math.max(cap, 2));
+    if(infAt('edu',x,y)>0) cap=Math.min(toolMax, cap+1);
+    if(infAt('park',x,y)>0&&def.zone==='res') cap=Math.min(toolMax, Math.max(cap, 2));
     if(t.pollution>55&&def.zone==='res') cap=Math.min(cap, 2);
     if((t.tripFail||0)>3) cap=Math.min(cap, Math.max(1,cap-1));
     if((t.crime||0)>60&&def.zone==='res') cap=Math.min(cap, 2);
@@ -3329,8 +3501,8 @@ function tick(){
       if((t.zoneAge||0)>=needAge){
         let chance=(0.08+(d/100)*0.16+desir*0.14+(t.landValue/100)*0.05)*(gameSettings.growthMult||1);
         if(population<150) chance*=1.35;
-        if(parkInf[idx]>0&&def.zone==='res') chance*=1.2;
-        if(policeInf[idx]>0) chance*=1.1;
+        if(infAt('park',x,y)>0&&def.zone==='res') chance*=1.2;
+        if(infAt('police',x,y)>0) chance*=1.1;
         if(tripStats.rate<0.45) chance*=0.65;
         if(happiness<35) chance*=0.55;
         if(t.level>=3 && def.density!=='high') chance*=0.35; /* low zones rarely hit L3 */
@@ -3345,7 +3517,7 @@ function tick(){
       if(!powered||!watered) decay+=0.045+(t.level>=3?0.03:0);
       if(d<-35) decay+=0.03;
       if((t.crime||0)>70&&def.zone==='res') decay+=0.025;
-      if(fireInf[idx]<0.01 && t.level>=3 && population>80) decay+=0.01; /* highrises want fire cover */
+      if(infAt('fire',x,y)<0.01 && t.level>=3 && population>80) decay+=0.01; /* highrises want fire cover */
       if(t.burning) decay+=0.1;
       if(t.flooded) decay+=0.07;
       if(happiness<25 && t.level>=2) decay+=0.02;
@@ -3422,12 +3594,12 @@ function tick(){
 
 function countDrainInfra(){
   let drains=0, treat=0;
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const def=toolById[grid[x][y].type];
-    if(!def) continue;
+  forEachActive((x,y,t)=>{
+    const def=toolById[t.type];
+    if(!def) return;
     if(def.id==='drain') drains++;
     if(def.treat) treat++;
-  }
+  });
   return {drains, treat};
 }
 
@@ -3449,11 +3621,10 @@ function tickDisasters(svc){
   const firePower=(svc.fire||0)*fundFire;
   if(Math.random()<0.00055*ec && population>70 && day%3===0){
     const cands=[];
-    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-      const t=grid[x][y];
-      if(!isZone(t)||t.level<=0||t.burning) continue;
-      if(fireInf[x*ROWS+y]*fundFire < 0.35) cands.push(x,y);
-    }
+    forEachActive((x,y,t)=>{
+      if(!isZone(t)||t.level<=0||t.burning) return;
+      if(infAt('fire',x,y)*fundFire < 0.35) cands.push(x,y);
+    });
     if(cands.length>=2){
       const i=((Math.random()*cands.length/2)|0)*2;
       const bx=cands[i], by=cands[i+1];
@@ -3466,25 +3637,24 @@ function tickDisasters(svc){
   /* Spread / extinguish */
   const toIgnite=[];
   burningTiles=0;
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y];
-    if(!t.burning) continue;
+  forEachActive((x,y,t)=>{
+    if(!t.burning) return;
     burningTiles++;
-    const cover=fireInf[x*ROWS+y]*fundFire;
+    const cover=infAt('fire',x,y)*fundFire;
     if(cover>0.45 || firePower>2 && cover>0.2){
       t.burning=false;
       upsertStructure(x,y);
       burningTiles--;
-      continue;
+      return;
     }
     if(Math.random()<0.18*(1-cover)){
       for(const [a,b] of neighbors4(x,y)){
         const n=grid[a][b];
-        if(((isZone(n)&&n.level>0)||isRoad(n)) && !n.burning && fireInf[a*ROWS+b]*fundFire<0.4) toIgnite.push(a,b);
+        if(((isZone(n)&&n.level>0)||isRoad(n)) && !n.burning && infAt('fire',a,b)*fundFire<0.4) toIgnite.push(a,b);
       }
     }
     if(isZone(t)&&t.level>0&&Math.random()<0.12){ t.level=Math.max(0,t.level-1); upsertStructure(x,y); }
-  }
+  });
   for(let i=0;i<toIgnite.length;i+=2){
     const t=grid[toIgnite[i]][toIgnite[i+1]];
     if(!t.burning){ t.burning=true; upsertStructure(toIgnite[i],toIgnite[i+1]); burningTiles++; }
@@ -3498,12 +3668,11 @@ function tickDisasters(svc){
   floodedTiles=0;
   if(Math.random()<0.00045*ec && population>90 && drainWeak && day%4===0){
     const cands=[];
-    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-      const t=grid[x][y];
-      if(t.terrain!=='land'||t.flooded) continue;
-      if(!nearTerrain(x,y,'water',2)) continue;
+    forEachActive((x,y,t)=>{
+      if((t.terrain!=='land'&&t.terrain!=='ravine')||t.flooded) return;
+      if(!nearTerrain(x,y,'water',2)) return;
       if(isZone(t)&&t.level>0) cands.push(x,y);
-    }
+    });
     if(cands.length>=2){
       const i=((Math.random()*cands.length/2)|0)*2;
       grid[cands[i]][cands[i+1]].flooded=true;
@@ -3512,25 +3681,24 @@ function tickDisasters(svc){
       if(alertKind!=='bankrupt'&&alertKind!=='fire') showAlert('flood', 'Flood risk — shoreline is under water. Build <b>Drain Pipes</b> and <b>Treatment</b> plants.');
     }
   }
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y];
-    if(!t.flooded) continue;
+  forEachActive((x,y,t)=>{
+    if(!t.flooded) return;
     floodedTiles++;
-    const localDrain=toolById[t.type]?.id==='drain' || (()=>{
-      for(const [a,b] of neighbors4(x,y)) if(grid[a][b].type==='drain'||toolById[grid[a][b].type]?.treat) return true;
-      return false;
-    })();
+    let localDrain=toolById[t.type]?.id==='drain';
+    if(!localDrain){
+      for(const [a,b] of neighbors4(x,y)) if(grid[a][b].type==='drain'||toolById[grid[a][b].type]?.treat){ localDrain=true; break; }
+    }
     if(!drainWeak || localDrain || infra.drains+infra.treat*2>=drainNeed){
       if(Math.random()<0.35 || localDrain){ t.flooded=false; upsertStructure(x,y); floodedTiles--; }
     } else if(Math.random()<0.08){
       for(const [a,b] of neighbors4(x,y)){
         const n=grid[a][b];
-        if(n.terrain==='land'&&!n.flooded&&nearTerrain(a,b,'water',3)&&(isZone(n)||n.type==='empty')){
+        if((n.terrain==='land'||n.terrain==='ravine')&&!n.flooded&&nearTerrain(a,b,'water',3)&&(isZone(n)||n.type==='empty')){
           n.flooded=true; upsertStructure(a,b); floodedTiles++; break;
         }
       }
     }
-  }
+  });
   if(floodedTiles===0 && alertKind==='flood') hideAlert();
 
   /* --- Winter blizzard --- */
@@ -3545,43 +3713,40 @@ function tickDisasters(svc){
 }
 
 function clearAllHazards(){
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y];
+  forEachActive((x,y,t)=>{
     if(t.burning||t.flooded){ t.burning=false; t.flooded=false; upsertStructure(x,y); }
-  }
+  });
   burningTiles=0; floodedTiles=0;
   if(alertKind==='fire'||alertKind==='flood'||alertKind==='blizzard') hideAlert();
 }
 
 function refreshLandValue(){
-  /* Micropolis land value: nature +, pollution/crime/traffic −, services +, CBD gravity */
   const dtx=cityCenter.x, dty=cityCenter.y;
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y]; if(t.terrain!=='land') continue;
-    let v=26+Math.max(0,24-Math.hypot(x-dtx,y-dty)*0.85);
-    if(y>ROWS-12) v+=10;
+  forEachActive((x,y,t)=>{
+    if(t.terrain==='water') return;
+    let v=26+Math.max(0,24-Math.hypot(x-dtx,y-dty)*0.85/(SCALE*0.25));
+    if(y>ROWS-Math.max(8, Math.round(12*SCALE/8))) v+=10;
     if(nearTerrain(x,y,'water',3)) v+=14;
     if(nearTerrain(x,y,'ravine',2)) v+=6;
-    if(eduInf[x*ROWS+y]>0) v+=7;
-    if(parkInf[x*ROWS+y]>0) v+=11;
+    if(infAt('edu',x,y)>0) v+=7;
+    if(infAt('park',x,y)>0) v+=11;
     if(t.pollution>20) v-=t.pollution*0.18;
     if((t.crime||0)>15) v-=t.crime*0.12;
-    /* local road traffic depresses residential value */
     let traf=0;
     for(const [a,b] of neighbors4(x,y)) if(isRoad(grid[a][b])) traf=Math.max(traf, grid[a][b].traffic);
     if(traf>40) v-=(traf-40)*0.12;
     if(t.island) v+=8;
     t.landValue=clamp(Math.round(v),5,100);
-  }
+  });
 }
 
 function runBudget(svc,roads){
   let aR=0,aC=0,aI=0;
-  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-    const t=grid[x][y]; if(!t.level||!isZone(t)) continue;
+  forEachActive((x,y,t)=>{
+    if(!t.level||!isZone(t)) return;
     const def=toolById[t.type]; const av=t.landValue*t.level;
     if(def.zone==='res') aR+=av; else if(def.zone==='com'||def.zone==='off') aC+=av; else aI+=av;
-  }
+  });
   const revenue=Math.round(aR*taxRates.res*0.9+aC*taxRates.com*1.1+aI*taxRates.ind*0.95+Math.min(population,jobs)*0.12);
   const upkeep=Math.round(
     roads*1.35*fundRoads +
