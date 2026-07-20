@@ -1219,15 +1219,221 @@ function hideAlert(){
   alertKind=null;
 }
 
+const SAVE_KEY='metroTorontoCS';
+const SAVE_VERSION=8;
+
+function tileNeedsSave(t){
+  return !!(t && (t.type!=='empty' || (t.level|0)>0 || t.burning || t.flooded || t.abandoned || (t.buildPhase|0)>0 || (t.zoneAge|0)>0));
+}
+function serializeTile(t){
+  return {
+    type:t.type, level:t.level|0,
+    pollution:+t.pollution||0, traffic:+t.traffic||0, crime:+t.crime||0,
+    powered:!!t.powered, watered:!!t.watered, densityCap:t.densityCap|0,
+    parkId:t.parkId||null, parkName:t.parkName||null, spec:t.spec||null,
+    buildPhase:t.buildPhase|0, burning:!!t.burning, flooded:!!t.flooded,
+    zoneAge:t.zoneAge|0, abandoned:!!t.abandoned
+  };
+}
+function collectSaveTiles(){
+  const tiles=[];
+  if(LARGE_MAP){
+    for(const [k,t] of tileMap){
+      if(!tileNeedsSave(t)) continue;
+      tiles.push({x:(k/ROWS)|0, y:k%ROWS, t:serializeTile(t)});
+    }
+  } else {
+    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+      const t=grid[x][y];
+      if(!tileNeedsSave(t)) continue;
+      tiles.push({x,y,t:serializeTile(t)});
+    }
+  }
+  return tiles;
+}
+function tilesFromLegacyGrid(g){
+  const tiles=[];
+  if(!Array.isArray(g)) return tiles;
+  for(let x=0;x<g.length;x++){
+    const col=g[x];
+    if(!col) continue;
+    if(Array.isArray(col)){
+      for(let y=0;y<col.length;y++){
+        const t=col[y];
+        if(tileNeedsSave(t)) tiles.push({x,y,t:serializeTile(t)});
+      }
+    } else if(typeof col==='object'){
+      for(const key of Object.keys(col)){
+        if(!/^\d+$/.test(key)) continue;
+        const y=+key, t=col[key];
+        if(tileNeedsSave(t)) tiles.push({x,y,t:serializeTile(t)});
+      }
+    }
+  }
+  return tiles;
+}
+function legacyGridHasCells(g){
+  if(!Array.isArray(g)||!g.length) return false;
+  for(let i=0;i<g.length;i++){
+    const col=g[i];
+    if(!col) continue;
+    if(Array.isArray(col)){
+      for(let y=0;y<col.length;y++) if(col[y] && typeof col[y]==='object') return true;
+    } else if(typeof col==='object'){
+      for(const key of Object.keys(col)) if(/^\d+$/.test(key)) return true;
+    }
+  }
+  return false;
+}
+function validateSave(s){
+  if(!s || typeof s!=='object') return {ok:false, reason:'Corrupt save data.'};
+  if(Array.isArray(s.tiles)){
+    if(s.cols!=null && (s.cols|0)!==COLS) return {ok:false, reason:'Save from older map — start new city (grid size changed).'};
+    if(s.rows!=null && (s.rows|0)!==ROWS) return {ok:false, reason:'Save from older map — start new city (grid size changed).'};
+    if(s.cellM!=null && Math.abs(Number(s.cellM)-CELL_M)>1) return {ok:false, reason:'Save from older map — start new city (cell scale changed).'};
+    return {ok:true, tiles:s.tiles};
+  }
+  if(Array.isArray(s.grid)){
+    if(!legacyGridHasCells(s.grid)){
+      return {ok:false, reason:'Save from older map — empty large-map format (buildings were not stored). Start new city.'};
+    }
+    const gc=s.grid.length;
+    let gr=0;
+    const c0=s.grid[0];
+    if(Array.isArray(c0)) gr=c0.length;
+    else if(c0 && typeof c0==='object'){
+      for(const key of Object.keys(c0)){ const y=+key; if(y===y && y+1>gr) gr=y+1; }
+    }
+    if(s.cols!=null && (s.cols|0)!==COLS) return {ok:false, reason:'Save from older map — start new city (grid size changed).'};
+    if(s.rows!=null && (s.rows|0)!==ROWS) return {ok:false, reason:'Save from older map — start new city (grid size changed).'};
+    if(gc && gc!==COLS) return {ok:false, reason:'Save from older map — start new city (grid size changed).'};
+    if(gr && gr!==ROWS) return {ok:false, reason:'Save from older map — start new city (grid size changed).'};
+    return {ok:true, tiles:tilesFromLegacyGrid(s.grid), legacy:true};
+  }
+  return {ok:false, reason:'Corrupt save — no city tiles found.'};
+}
+function applyTileState(cell, saved){
+  if(!cell||!saved) return;
+  cell.type=saved.type||'empty';
+  cell.level=saved.level|0;
+  cell.pollution=+saved.pollution||0;
+  cell.traffic=+saved.traffic||0;
+  cell.crime=+saved.crime||0;
+  cell.powered=!!saved.powered;
+  cell.watered=!!saved.watered;
+  if(saved.densityCap!=null) cell.densityCap=saved.densityCap|0;
+  cell.parkId=saved.parkId||null;
+  cell.parkName=saved.parkName||null;
+  cell.spec=saved.spec||null;
+  cell.buildPhase=saved.buildPhase|0;
+  cell.burning=!!saved.burning;
+  cell.flooded=!!saved.flooded;
+  cell.zoneAge=saved.zoneAge|0;
+  cell.abandoned=!!saved.abandoned;
+}
+function restoreCameraFromSave(s){
+  if(!s||!s.cam||!orbit) return;
+  const c=s.cam;
+  if(Number.isFinite(c.x)){ orbit.target.x=clamp(c.x,2,COLS-2); orbit.targetGoal.x=orbit.target.x; }
+  if(Number.isFinite(c.z)){ orbit.target.z=clamp(c.z,2,ROWS-2); orbit.targetGoal.z=orbit.target.z; }
+  if(Number.isFinite(c.radius)){ orbit.spherical.radius=c.radius; orbit.goal.radius=c.radius; }
+  if(Number.isFinite(c.phi)){ orbit.spherical.phi=c.phi; orbit.goal.phi=c.phi; }
+  if(Number.isFinite(c.theta)){ orbit.spherical.theta=c.theta; orbit.goal.theta=c.theta; }
+  updateCamera();
+}
+function recountPopulationFromGrid(){
+  let pop=0;
+  forEachActive((x,y,t)=>{
+    const def=toolById[t.type];
+    if(isZone(t)&&t.level>0&&def&&def.zone==='res') pop+=t.level*(def.density==='high'?28:16);
+  });
+  population=pop;
+}
+function scanLandmarkMilestones(){
+  forEachActive((x,y,t)=>{
+    if(t.type==='park_highpark') milestones.highpark=true;
+    if(t.type==='cntower') milestones.cntower=true;
+    if(t.type==='airport'||t.type==='stadium') milestones.landmark=true;
+  });
+}
+function applyLoadedSave(s, tiles){
+  makeTerrain();
+  for(let i=0;i<tiles.length;i++){
+    const e=tiles[i];
+    const x=e.x|0, y=e.y|0;
+    if(!inBounds(x,y)) continue;
+    const cell=LARGE_MAP?ensureTile(x,y):grid[x][y];
+    applyTileState(cell, e.t||e);
+  }
+  rebuildActiveTiles();
+  money=Number(s.money); if(!Number.isFinite(money)) money=55000;
+  day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
+  happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60;
+  strikeUntil=s.strikeUntil??-1; blizzardUntil=s.blizzardUntil??-1;
+  if(s.settings) gameSettings=Object.assign({}, gameSettings, s.settings, {continueSave:false});
+  recountPopulationFromGrid();
+  loadMilestonesFromSave(s);
+  scanLandmarkMilestones();
+  placeLabels();
+  restoreCameraFromSave(s);
+  worldDirty=true; structuresDirty=true; utilDirty=true; infDirty=true;
+  applySeasonLook();
+  recomputeUtilities(); updateUI(1,1,1); renderGoals(); renderToolbar(); applyTutorialFocus();
+}
+function loadCityFromStorage(opts){
+  const quiet=!!(opts&&opts.quiet);
+  const raw=localStorage.getItem(SAVE_KEY);
+  if(!raw){
+    const reason='No save found.';
+    if(!quiet){ log(reason,true); showToast(reason,'warn',3200); }
+    return {ok:false, reason};
+  }
+  let s;
+  try{ s=JSON.parse(raw); }catch(_){
+    const reason='Corrupt save (invalid JSON).';
+    if(!quiet){ log(reason,true); showToast(reason,'warn',4000); }
+    return {ok:false, reason};
+  }
+  const check=validateSave(s);
+  if(!check.ok){
+    if(!quiet){ log(check.reason,true); showToast(check.reason,'warn',5200); }
+    return {ok:false, reason:check.reason};
+  }
+  try{
+    applyLoadedSave(s, check.tiles||[]);
+    if(!quiet) log(check.legacy?'Loaded (migrated older save).':'Loaded.');
+    return {ok:true, save:s};
+  }catch(e){
+    const reason='Load failed — '+(e&&e.message?e.message:'unknown error');
+    if(!quiet){ log(reason,true); showToast('Could not load save. Start new city or try again.','warn',4500); }
+    console.error(e);
+    return {ok:false, reason};
+  }
+}
+
 function saveCity(silent){
   try{
-    localStorage.setItem('metroTorontoCS', JSON.stringify({
-      grid, money, day, taxRates, seasonIdx, year, happiness, strikeUntil, blizzardUntil,
-      settings:gameSettings, milestones, tutorialStep, tutorialActive, hist, audioMuted, v:7
-    }));
+    const tiles=collectSaveTiles();
+    const payload={
+      v:SAVE_VERSION, cols:COLS, rows:ROWS, cellM:CELL_M,
+      tiles, money, day, taxRates, seasonIdx, year, happiness, strikeUntil, blizzardUntil,
+      settings:gameSettings, milestones, tutorialStep, tutorialActive, hist, audioMuted,
+      cam:{
+        x:orbit.target.x, z:orbit.target.z,
+        radius:orbit.spherical.radius, phi:orbit.spherical.phi, theta:orbit.spherical.theta
+      }
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
     if(!silent) log('Saved.');
     return true;
-  }catch(e){ if(!silent) log('Save failed',true); return false; }
+  }catch(e){
+    if(!silent){
+      const quota=e&&(e.name==='QuotaExceededError'||/quota/i.test(String(e)));
+      log(quota?'Save failed — storage full.':'Save failed',true);
+      showToast(quota?'Save failed — browser storage full.':'Save failed.','warn',3500);
+    }
+    return false;
+  }
 }
 
 function loadMilestonesFromSave(s){
@@ -1528,7 +1734,7 @@ const canvas=document.getElementById('game');
 const renderer=new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.75));
 /* Harbour daylight clear — avoid near-black void behind the map */
-renderer.setClearColor(0x3a6a7a);
+renderer.setClearColor(0x3e7080);
 renderer.shadowMap.enabled=false;
 /* Linear output: sRGBEncoding + Phong midtones read near-black on many GPUs.
    ACES is also banned — filmic crush made the whole city unreadable. */
@@ -1537,9 +1743,9 @@ renderer.toneMapping=THREE.NoToneMapping;
 renderer.toneMappingExposure=1.15;
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x3a6a7a);
+scene.background=new THREE.Color(0x3e7080);
 const FOG_DENSITY=LARGE_MAP?0.00009:0.0011;
-scene.fog=new THREE.FogExp2(0x4a7a88, FOG_DENSITY);
+scene.fog=new THREE.FogExp2(0x4a8090, FOG_DENSITY);
 const camera=new THREE.PerspectiveCamera(42,1,0.1, Math.max(500, Math.hypot(COLS,ROWS)*1.6));
 /* Start overlooking buildable land near Toronto City Hall */
 const _torLonLat=[-79.3832, 43.6532];
@@ -1895,41 +2101,16 @@ const _isl=geoLabel('Toronto Islands', Math.floor(COLS*0.49), Math.floor(ROWS*0.
 harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(_isl[0],-0.72,_isl[1]); scene.add(harbourPlane);
 
 function applySeasonLook(){
-  const s=seasonIdx;
+  /* Fixed harbour daylight — calendar seasons do not shift lights/sky/fog */
+  ambient.color.setHex(0xd0e0e8); ambient.intensity=0.62;
+  sun.color.setHex(0xfff8ec); sun.intensity=1.55;
+  sun.position.set(48,62,28);
+  hemi.color.setHex(0xc0dce8); hemi.groundColor.setHex(0x5a7a40); hemi.intensity=0.5;
+  rim.color.setHex(0xa0c0cc); rim.intensity=0.32;
   const fogBase=FOG_DENSITY;
-  if(s===0){ /* Spring */
-    ambient.color.setHex(0xc0d4e0); ambient.intensity=0.58;
-    sun.color.setHex(0xfff4e4); sun.intensity=1.4;
-    hemi.color.setHex(0xb0d0e0); hemi.groundColor.setHex(0x4a6540); hemi.intensity=0.45;
-    rim.color.setHex(0x90b0c0); rim.intensity=0.28;
-    scene.fog.color.setHex(0x4a7a88); scene.fog.density=fogBase*(LARGE_MAP?1:1.1);
-    scene.background.setHex(0x3a6a7a);
-    renderer.setClearColor(0x3a6a7a);
-  } else if(s===1){ /* Summer */
-    ambient.color.setHex(0xd0e0e8); ambient.intensity=0.62;
-    sun.color.setHex(0xfff8ec); sun.intensity=1.55;
-    hemi.color.setHex(0xc0dce8); hemi.groundColor.setHex(0x5a7a40); hemi.intensity=0.5;
-    rim.color.setHex(0xa0c0cc); rim.intensity=0.32;
-    scene.fog.color.setHex(0x4a8090); scene.fog.density=fogBase*(LARGE_MAP?0.95:0.82);
-    scene.background.setHex(0x3e7080);
-    renderer.setClearColor(0x3e7080);
-  } else if(s===2){ /* Fall */
-    ambient.color.setHex(0xd8c0a0); ambient.intensity=0.55;
-    sun.color.setHex(0xffd090); sun.intensity=1.35;
-    hemi.color.setHex(0xd8b080); hemi.groundColor.setHex(0x5a4830); hemi.intensity=0.42;
-    rim.color.setHex(0xb09878); rim.intensity=0.26;
-    scene.fog.color.setHex(0x5a5848); scene.fog.density=fogBase*(LARGE_MAP?1.05:1.18);
-    scene.background.setHex(0x3a3830);
-    renderer.setClearColor(0x3a3830);
-  } else { /* Winter */
-    ambient.color.setHex(0xd0dce8); ambient.intensity=0.6;
-    sun.color.setHex(0xf0f4ff); sun.intensity=1.4;
-    hemi.color.setHex(0xd8e4f0); hemi.groundColor.setHex(0x789098); hemi.intensity=0.48;
-    rim.color.setHex(0xa8c0d0); rim.intensity=0.3;
-    scene.fog.color.setHex(0x4a6070); scene.fog.density=fogBase*(LARGE_MAP?1:0.91);
-    scene.background.setHex(0x345060);
-    renderer.setClearColor(0x345060);
-  }
+  scene.fog.color.setHex(0x4a8090); scene.fog.density=fogBase*(LARGE_MAP?0.95:0.82);
+  scene.background.setHex(0x3e7080);
+  renderer.setClearColor(0x3e7080);
 }
 
 const hoverMesh=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.1,0.95), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
@@ -2301,36 +2482,30 @@ const _color=new THREE.Color();
 
 function landColor(t,x,y){
   const lv=t.landValue/100;
-  const winter=seasonIdx===3;
   // Toronto Islands — vivid park green
   if(t.island){
     let r=48+noise2(x,y)*12, g=98+noise2(x+1,y)*18, b=52+noise2(x,y+2)*10;
-    if(winter){r=r*0.55+140;g=g*0.55+150;b=b*0.55+160}
     return (clamp(r,30,200)<<16)|(clamp(g,40,210)<<8)|clamp(b,30,200);
   }
-  // Shoreline / harbourfront limestone–sand tint
+  // Shoreline / waterfront limestone–sand tint
   if(nearTerrain(x,y,'water',1)){
     let r=120+lv*20, g=128+lv*15, b=105+lv*10;
-    if(winter){r=180;g=188;b=195}
     return (clamp(r,60,210)<<16)|(clamp(g,70,210)<<8)|clamp(b,50,200);
   }
   // Downtown concrete warm-grey (high land value near CBD)
   if(lv>0.62){
     let r=118+lv*35+noise2(x,y)*8, g=118+lv*28, b=112+lv*20;
-    if(winter){r=r*0.7+90;g=g*0.7+95;b=b*0.7+105}
     return (clamp(r,80,200)<<16)|(clamp(g,80,195)<<8)|clamp(b,75,190);
   }
   // Brick midrise / neighbourhood tones
   if(lv>0.4){
     let r=128+lv*25+noise2(x,y)*10, g=108+lv*20, b=92+lv*12;
-    if(winter){r=r*0.65+100;g=g*0.65+110;b=b*0.65+120}
     return (clamp(r,70,200)<<16)|(clamp(g,60,180)<<8)|clamp(b,50,170);
   }
   // Outer residential / green fringe
   let r=95+lv*35, g=118+lv*30, b=88+lv*15;
   if(t.pollution>20){r+=t.pollution*0.35;g-=t.pollution*0.2}
   const n=noise2(x,y)*10;
-  if(winter){r=r*0.55+130;g=g*0.55+140;b=b*0.55+150}
   return (clamp(r+n,40,200)<<16)|(clamp(g,50,200)<<8)|clamp(b,40,180);
 }
 
@@ -2346,7 +2521,6 @@ function waterTileColor(x,y){
 function ravineWaterColor(x,y){
   const bank=nearTerrain(x,y,'land',1);
   const n=noise2(x*0.45,y*0.45);
-  if(seasonIdx===3) return bank?0x4a7088:0x3a6078; /* winter ice-teal */
   if(bank) return n>0.5?0x2a8898:0x2490a0;
   return n>0.55?0x1a6a80:0x1e7890;
 }
@@ -3670,8 +3844,6 @@ function tick(){
   year=1+Math.floor(day/(DAYS*4));
   if(seasonIdx!==prev){
     log(`${SEASONS[seasonIdx]} arrives.`,true);
-    applySeasonLook();
-    refreshGroundInstances();
   }
   if(utilDirty) recomputeUtilities();
   if(infDirty || day%25===0) refreshInfluence();
@@ -4159,29 +4331,7 @@ document.getElementById('btn-share').onclick=()=>shareCity();
 const muteBtn=document.getElementById('btn-mute');
 if(muteBtn) muteBtn.onclick=()=>{ setAudioMuted(!audioMuted); };
 window.addEventListener('pointerdown',()=>{ if(!audioMuted && !ambientCtl) ensureAmbient(); },{passive:true});
-document.getElementById('btn-load').onclick=()=>{
-  try{
-    const raw=localStorage.getItem('metroTorontoCS'); if(!raw){log('No save.',true);return}
-    const s=JSON.parse(raw); grid=s.grid; money=Number(s.money); if(!Number.isFinite(money)) money=55000;
-    day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
-    happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1; blizzardUntil=s.blizzardUntil??-1;
-    if(s.settings) gameSettings=Object.assign({}, gameSettings, s.settings);
-    population=0;
-    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-      const t=grid[x][y], def=toolById[t.type];
-      if(isZone(t)&&t.level>0&&def&&def.zone==='res') population+=t.level*(def.density==='high'?28:16);
-    }
-    loadMilestonesFromSave(s);
-    for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-      if(grid[x][y].type==='park_highpark') milestones.highpark=true;
-      if(grid[x][y].type==='cntower') milestones.cntower=true;
-      if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
-    }
-    placeLabels(); worldDirty=true; structuresDirty=true; applySeasonLook();
-    recomputeUtilities(); updateUI(1,1,1); renderGoals(); renderToolbar(); applyTutorialFocus();
-    log('Loaded.');
-  }catch(e){log('Load failed',true)}
-};
+document.getElementById('btn-load').onclick=()=>{ loadCityFromStorage(); };
 document.getElementById('btn-reset').onclick=()=>{
   saveCity(true);
   setSpeed(0);
@@ -4202,33 +4352,18 @@ function applyNewGame(settings){
   if(appRoot) appRoot.style.visibility='visible';
 
   if(gameSettings.continueSave){
-    try{
-      const raw=localStorage.getItem('metroTorontoCS');
-      if(!raw) throw new Error('No save');
-      const s=JSON.parse(raw); grid=s.grid; money=Number(s.money); if(!Number.isFinite(money)) money=55000;
-      day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
-      happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1; blizzardUntil=s.blizzardUntil??-1;
-      if(s.settings) gameSettings=Object.assign({}, gameSettings, s.settings, {continueSave:false});
-      population=0;
-      for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-        const t=grid[x][y], def=toolById[t.type];
-        if(isZone(t)&&t.level>0&&def&&def.zone==='res') population+=t.level*(def.density==='high'?28:16);
-      }
-      loadMilestonesFromSave(s);
-      for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-        if(grid[x][y].type==='park_highpark') milestones.highpark=true;
-        if(grid[x][y].type==='cntower') milestones.cntower=true;
-        if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
-      }
-      placeLabels();
+    const res=loadCityFromStorage({quiet:true});
+    if(res.ok){
       logEl.innerHTML=''; log('Continued saved city.');
-    }catch(e){
+    } else {
       makeTerrain();
       money=Number(gameSettings.money)||55000; day=0; year=1; seasonIdx=clamp(Number(gameSettings.season)||0,0,3);
       happiness=62; strikeUntil=-1; lastBudget={revenue:0,upkeep:0,net:0};
       milestones={firstPop:false,pop100:false,pop1k:false,pop10k:false,highpark:false,cntower:false,landmark:false,metroToronto:false};
       tutorialStep=0; tutorialActive=!!gameSettings.guide;
-      logEl.innerHTML=''; log('No save found — started fresh.');
+      logEl.innerHTML='';
+      log((res.reason||'Could not load save')+' — started fresh.');
+      showToast(res.reason||'Could not load save — started fresh.','warn',5200);
     }
   } else {
     makeTerrain();
@@ -4316,31 +4451,17 @@ applySeasonLook();
 rebuildGround(); rebuildAllStructures(); setSpeed(1);
 updateUI(1,1,1); renderGoals(); startAutosave();
 if(gameSettings.continueSave){
-  try{
-    const raw=localStorage.getItem('metroTorontoCS');
-    if(raw){
-      const s=JSON.parse(raw); grid=s.grid; money=Number(s.money); if(!Number.isFinite(money)) money=55000;
-      day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
-      happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1; blizzardUntil=s.blizzardUntil??-1;
-      if(s.settings) gameSettings=Object.assign({}, gameSettings, s.settings, {continueSave:false});
-      population=0;
-      for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-        const t=grid[x][y], def=toolById[t.type];
-        if(isZone(t)&&t.level>0&&def&&def.zone==='res') population+=t.level*(def.density==='high'?28:16);
-      }
-      loadMilestonesFromSave(s);
-      for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
-        const tp=grid[x][y].type;
-        if(tp==='park_highpark') milestones.highpark=true;
-        if(tp==='cntower') milestones.cntower=true;
-        if(tp==='airport'||tp==='stadium') milestones.landmark=true;
-      }
-      placeLabels(); worldDirty=true; structuresDirty=true; applySeasonLook(); recomputeUtilities(); updateUI(1,1,1);
-      renderGoals(); renderToolbar();
-      if(guideEl) guideEl.classList.add('hidden');
-      log('Continued saved city.');
-    }
-  }catch(_){}
+  const res=loadCityFromStorage({quiet:true});
+  if(res.ok){
+    if(guideEl) guideEl.classList.add('hidden');
+    log('Continued saved city.');
+  } else {
+    log((res.reason||'Could not load save')+' — started fresh.');
+    showToast(res.reason||'Could not load save — started fresh.','warn',5200);
+    tutorialStep=0;
+    tutorialActive=!!gameSettings.guide;
+    applyTutorialFocus();
+  }
 } else {
   tutorialStep=0;
   tutorialActive=!!gameSettings.guide;
