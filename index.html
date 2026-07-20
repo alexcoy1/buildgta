@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metro Builder: Toronto</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+:root{
+  --ttc:#c8102e; --lake:#1a6b7c; --ravine:#1e3d28; --concrete:#8a8e8a;
+  --bg:#0c1820; --panel:#122028; --panel2:#1a2e38;
+  --ink:#e6ebe8; --dim:#7a929c; --good:#5cbf6a; --bad:#e05a45; --warn:#e0b04a;
+  --res:#c9a227; --com:#2a9d8f; --ind:#a05a2c; --off:#5b7cfa;
+  --limestone:#a8a69e;
+}
+*{box-sizing:border-box} html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:'Source Sans 3',system-ui,sans-serif;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh}
+header.board{background:linear-gradient(180deg,#1e3340 0%,#122028 70%);border-bottom:3px solid var(--ttc);padding:7px 14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;z-index:6;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+.brand{font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:13px;color:var(--limestone)}.brand span{color:var(--ttc);letter-spacing:.14em}
+.stat{display:flex;flex-direction:column;padding:1px 9px;border-left:1px solid rgba(168,166,158,.18);min-width:62px}
+.stat label{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.stat .val{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600}
+.val.bad{color:var(--bad)}.val.good{color:var(--good)}.val.warn{color:var(--warn)}.spacer{flex:1}
+button.ctl{background:var(--panel2);border:1px solid rgba(168,166,158,.2);color:var(--ink);padding:5px 9px;border-radius:3px;cursor:pointer;font-weight:700;font-size:11px;font-family:inherit;transition:background .12s}
+button.ctl:hover{border-color:rgba(200,16,46,.45)}
+button.ctl.active{background:var(--ttc);border-color:var(--ttc);color:#fff}
+button.ctl.ghost{background:transparent;color:var(--dim)}
+.main{flex:1;display:flex;min-height:0}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 70%,#143040 0%,#0a1520 55%,#071018 100%);cursor:crosshair}
+#game{display:block;width:100%;height:100%}
+.label-layer{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
+.map-label{position:absolute;transform:translate(-50%,-100%);font-size:8px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(232,236,232,.28);text-shadow:0 1px 4px rgba(0,0,0,.7);white-space:nowrap;opacity:.85}
+.hud-tip{position:absolute;left:10px;bottom:10px;z-index:3;background:rgba(18,32,40,.94);border:1px solid rgba(26,107,124,.35);border-left:3px solid var(--ttc);padding:9px 12px;border-radius:4px;font-size:11px;color:var(--dim);max-width:380px;pointer-events:none;backdrop-filter:blur(4px)}
+.hud-tip strong{color:var(--ink)}.hud-tip.warn{border-color:var(--warn);border-left-color:var(--warn);color:#f0d090}
+aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);border-left:1px solid rgba(168,166,158,.12);padding:12px;display:flex;flex-direction:column;gap:11px;overflow-y:auto;z-index:6}
+.panel h3{font-size:9px;text-transform:uppercase;letter-spacing:.16em;color:var(--lake);margin:0 0 6px;border-bottom:1px solid rgba(26,107,124,.25);padding-bottom:4px}
+.rci-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.roundel{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:9px;color:#111;flex:none}
+.rci-bar{flex:1;height:9px;background:rgba(255,255,255,.07);border-radius:5px;position:relative;overflow:hidden}
+.rci-fill{position:absolute;top:0;bottom:0;left:50%}.rci-mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.28)}
+.taxrow{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:4px}.taxrow input{flex:1}.tval{width:32px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px}
+#happiness-bar-outer{height:9px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden;margin-top:3px}
+#happiness-bar{height:100%;background:linear-gradient(90deg,#3a8a50,var(--good));width:50%}
+.metrics{font-size:11px;color:var(--dim);line-height:1.45}.metrics b{color:var(--ink)}
+.inspect{background:rgba(26,46,56,.85);border:1px solid rgba(168,166,158,.1);border-radius:4px;padding:8px 10px;font-size:11px;line-height:1.4;min-height:68px;color:var(--dim)}
+.inspect .title{color:var(--ink);font-weight:700;margin-bottom:2px}
+.log{font-size:10px;line-height:1.4;color:var(--dim);max-height:130px;overflow-y:auto;display:flex;flex-direction:column-reverse}
+.log div{border-bottom:1px dotted rgba(255,255,255,.06);padding:2px 0}.log .ev{color:#e8b86a}
+.bottom{background:var(--panel);border-top:1px solid rgba(168,166,158,.14);z-index:6}
+.cats{display:flex;gap:2px;padding:7px 10px 0;flex-wrap:wrap}
+.cat{background:transparent;border:1px solid rgba(168,166,158,.15);color:var(--dim);padding:6px 10px;border-radius:3px 3px 0 0;cursor:pointer;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-family:inherit}
+.cat:hover{color:var(--ink);border-color:rgba(200,16,46,.35)}
+.cat.active{background:var(--panel2);color:var(--ink);border-bottom-color:var(--panel2);box-shadow:inset 0 -2px 0 var(--ttc)}
+.toolbar{padding:7px 10px 9px;display:flex;gap:4px;flex-wrap:wrap;align-items:flex-start;max-height:120px;overflow-y:auto;background:var(--panel2)}
+.tool{display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:none;cursor:pointer;color:var(--dim);padding:4px;border-radius:4px;min-width:54px;font-family:inherit}
+.tool:hover{background:rgba(255,255,255,.05);color:var(--ink)}
+.tool.selected{background:rgba(200,16,46,.18);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ttc)}
+.tool .ico{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#111;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.tool .lbl{font-size:8px;text-transform:uppercase;letter-spacing:.02em;text-align:center;max-width:58px;line-height:1.1}
+.tool .cost{font-size:8px;font-family:'IBM Plex Mono',monospace;color:var(--dim)}
+.parks-panel{display:none;padding:6px 10px 9px;background:#0f222a;max-height:140px;overflow-y:auto;border-top:1px solid rgba(26,107,124,.2)}
+.parks-panel.show{display:block}
+.parks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:4px}
+.park-btn{background:rgba(30,61,40,.35);border:1px solid rgba(92,191,106,.2);color:var(--ink);padding:6px 8px;border-radius:3px;cursor:pointer;font-size:10px;text-align:left;font-family:inherit}
+.park-btn:hover{border-color:var(--good);background:rgba(30,61,40,.55)}.park-btn.selected{border-color:var(--ttc);background:rgba(200,16,46,.15)}
+.park-btn small{display:block;color:var(--dim);font-family:'IBM Plex Mono',monospace}
+.boot-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0c1820;color:#e6ebe8;font-family:'Source Sans 3',system-ui,sans-serif;padding:24px;text-align:center}
+.boot-overlay.hidden{display:none}
+.boot-card{max-width:420px;background:#122028;border:1px solid rgba(168,166,158,.2);border-left:3px solid #c8102e;padding:22px 24px;border-radius:6px}
+.boot-card h1{margin:0 0 8px;font-size:16px;letter-spacing:.08em;text-transform:uppercase}
+.boot-card p{margin:0;font-size:13px;color:#7a929c;line-height:1.5}
+.boot-card.error{border-left-color:#e05a45}
+.boot-card.error p{color:#e0b0a0}
+.guide-overlay{position:absolute;inset:0;z-index:5;display:flex;align-items:flex-end;justify-content:flex-start;padding:14px;pointer-events:none;background:linear-gradient(180deg,transparent 55%,rgba(8,16,22,.55) 100%)}
+.guide-overlay.hidden{display:none}
+.guide-card{pointer-events:auto;max-width:360px;background:rgba(18,32,40,.96);border:1px solid rgba(26,107,124,.4);border-left:3px solid #c8102e;padding:14px 16px;border-radius:6px;font-size:12px;color:#7a929c;line-height:1.45;backdrop-filter:blur(6px)}
+.guide-card strong{color:#e6ebe8}
+.guide-card ol{margin:8px 0 10px;padding-left:18px}
+.guide-card li{margin:3px 0}
+.guide-card button{background:#c8102e;border:none;color:#fff;font-weight:700;font-size:11px;padding:7px 12px;border-radius:3px;cursor:pointer;font-family:inherit}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#2a4a55;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="boot-overlay" id="boot"><div class="boot-card" id="boot-card"><h1>Metro Builder · Toronto</h1><p id="boot-msg">Loading Three.js…</p></div></div>
+<div class="app" id="app-root" style="visibility:hidden">
+<header class="board">
+  <div class="brand">METRO BUILDER · <span>TORONTO</span></div>
+  <div class="stat"><label>Treasury</label><div class="val" id="stat-money">$0</div></div>
+  <div class="stat"><label>Population</label><div class="val" id="stat-pop">0</div></div>
+  <div class="stat"><label>Jobs</label><div class="val" id="stat-jobs">0</div></div>
+  <div class="stat"><label>Unemp.</label><div class="val" id="stat-unemp">0%</div></div>
+  <div class="stat"><label>Year</label><div class="val" id="stat-date">Y1 Spring</div></div>
+  <div class="stat"><label>Power</label><div class="val" id="stat-power">OK</div></div>
+  <div class="stat"><label>Water</label><div class="val" id="stat-water">OK</div></div>
+  <div class="stat"><label>Waste</label><div class="val" id="stat-waste">OK</div></div>
+  <div class="spacer"></div>
+  <button class="ctl" id="btn-pause">II</button>
+  <button class="ctl active" id="btn-normal">▶</button>
+  <button class="ctl" id="btn-fast">▶▶</button>
+  <button class="ctl ghost" id="btn-save">Save</button>
+  <button class="ctl ghost" id="btn-load">Load</button>
+  <button class="ctl ghost" id="btn-reset">New City</button>
+</header>
+<div class="main">
+  <div class="canvas-wrap" id="wrap">
+    <canvas id="game"></canvas>
+    <div class="label-layer" id="labels"></div>
+    <div class="hud-tip" id="tip"><strong>Build from the 401.</strong> Roads south toward the harbour → zone R → Power → Water. LMB paint · RMB orbit · MMB/Shift+LMB/Space+LMB pan · wheel zoom · WASD pan.</div>
+    <div class="guide-overlay" id="guide">
+      <div class="guide-card">
+        <strong>Quick start</strong>
+        <ol>
+          <li>Paint a <strong>Street</strong> south from the <strong>401</strong></li>
+          <li>Zone <strong>R Low</strong> beside that road</li>
+          <li>Place <strong>Power</strong> + <strong>Water Tower</strong> on the network</li>
+          <li>Hit <strong>▶▶</strong> — population appears in seconds</li>
+        </ol>
+        <div style="margin-bottom:8px;font-size:11px">LMB paint · RMB orbit · MMB / Shift+LMB pan · WASD pan · wheel zoom</div>
+        <button type="button" id="guide-dismiss">Got it — build</button>
+      </div>
+    </div>
+  </div>
+  <aside class="panel">
+    <div>
+      <h3>RCI Demand</h3>
+      <div class="rci-row"><div class="roundel" style="background:var(--res)">R</div><div class="rci-bar"><div class="rci-fill" id="rci-r" style="background:var(--res)"></div><div class="rci-mid"></div></div></div>
+      <div class="rci-row"><div class="roundel" style="background:var(--com)">C</div><div class="rci-bar"><div class="rci-fill" id="rci-c" style="background:var(--com)"></div><div class="rci-mid"></div></div></div>
+      <div class="rci-row"><div class="roundel" style="background:var(--ind)">I</div><div class="rci-bar"><div class="rci-fill" id="rci-i" style="background:var(--ind)"></div><div class="rci-mid"></div></div></div>
+      <div class="rci-row"><div class="roundel" style="background:var(--off)">O</div><div class="rci-bar"><div class="rci-fill" id="rci-o" style="background:var(--off)"></div><div class="rci-mid"></div></div></div>
+    </div>
+    <div>
+      <h3>Tax %</h3>
+      <div class="taxrow"><span style="color:var(--res)">R</span><input type="range" id="tax-r" min="0" max="25" value="9"><span class="tval" id="tax-r-v">9%</span></div>
+      <div class="taxrow"><span style="color:var(--com)">C</span><input type="range" id="tax-c" min="0" max="25" value="10"><span class="tval" id="tax-c-v">10%</span></div>
+      <div class="taxrow"><span style="color:var(--ind)">I</span><input type="range" id="tax-i" min="0" max="25" value="8"><span class="tval" id="tax-i-v">8%</span></div>
+    </div>
+    <div><h3>Happiness</h3><div id="happiness-bar-outer"><div id="happiness-bar"></div></div><div class="metrics" id="hap-d" style="margin-top:3px"></div></div>
+    <div><h3>Economy</h3><div class="metrics" id="econ"></div></div>
+    <div><h3>Inspector</h3><div class="inspect" id="inspect">Hover a tile.</div></div>
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column"><h3>Log</h3><div class="log" id="log"></div></div>
+  </aside>
+</div>
+<div class="bottom">
+  <div class="cats" id="cats"></div>
+  <div class="toolbar" id="toolbar"></div>
+  <div class="parks-panel" id="parks-panel"><div class="parks-grid" id="parks-grid"></div></div>
+</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+const THREE_URLS=[
+  'https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js',
+  'https://unpkg.com/three@0.149.0/build/three.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.149.0/three.min.js'
+];
+
+function showBootError(msg){
+  const boot=document.getElementById('boot');
+  const card=document.getElementById('boot-card');
+  const el=document.getElementById('boot-msg');
+  if(boot) boot.classList.remove('hidden');
+  if(card) card.classList.add('error');
+  if(el) el.textContent=msg;
+}
+
+function loadScript(url){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=url; s.async=true;
+    s.onload=()=>resolve(url);
+    s.onerror=()=>reject(new Error('Failed: '+url));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureThree(){
+  if(typeof THREE!=='undefined') return;
+  const msg=document.getElementById('boot-msg');
+  for(let i=0;i<THREE_URLS.length;i++){
+    if(msg) msg.textContent='Loading Three.js… ('+(i+1)+'/'+THREE_URLS.length+')';
+    try{
+      await loadScript(THREE_URLS[i]);
+      if(typeof THREE!=='undefined') return;
+    }catch(_){}
+  }
+  throw new Error('Could not load Three.js from CDN. Check your internet connection, then refresh. Hosting on GitHub Pages / Netlify (HTTPS) is more reliable than opening this file directly.');
+}
+
+ensureThree().then(()=>{
+  try{ startGame(); }
+  catch(err){ showBootError((err&&err.message)||String(err)); console.error(err); }
+}).catch(err=>showBootError(err.message||String(err)));
+
+function startGame(){
+if(typeof THREE==='undefined'){ showBootError('Three.js loaded but THREE is undefined.'); return; }
+const boot=document.getElementById('boot');
+const appRoot=document.getElementById('app-root');
+if(boot) boot.classList.add('hidden');
+if(appRoot) appRoot.style.visibility='visible';
+
+const COLS=80, ROWS=54, CELL=1;
+const SEASONS=['Spring','Summer','Fall','Winter'];
+const DAYS=90;
+
+/* ---- Toronto parks (20+) ---- */
+const TORONTO_PARKS=[
+  {id:'highpark', name:'High Park', cost:400, color:0x3d6b35, radius:8},
+  {id:'trinity', name:'Trinity Bellwoods', cost:320, color:0x4a7a3a, radius:6},
+  {id:'christie', name:'Christie Pits', cost:280, color:0x457038, radius:5},
+  {id:'riverdale', name:'Riverdale Park', cost:350, color:0x3f6e32, radius:7},
+  {id:'allan', name:"Allan Gardens", cost:260, color:0x528a40, radius:5},
+  {id:'queens', name:"Queen's Park", cost:300, color:0x3a6840, radius:5},
+  {id:'grange', name:'Grange Park', cost:240, color:0x4d7c44, radius:4},
+  {id:'corktown', name:'Corktown Common', cost:380, color:0x3b7348, radius:6},
+  {id:'sugar', name:'Sugar Beach', cost:420, color:0x5a9e6a, radius:5},
+  {id:'hto', name:'HTO Park', cost:400, color:0x4a8f70, radius:5},
+  {id:'centennial', name:'Centennial Park', cost:450, color:0x356b30, radius:8},
+  {id:'sunnybrook', name:'Sunnybrook Park', cost:480, color:0x2f5e2c, radius:9},
+  {id:'edwards', name:'Edwards Gardens', cost:360, color:0x4c8038, radius:6},
+  {id:'tommy', name:'Tommy Thompson Park', cost:500, color:0x2d5540, radius:8},
+  {id:'rouge', name:'Rouge Park', cost:550, color:0x285428, radius:10},
+  {id:'bluffers', name:"Bluffer's Park", cost:480, color:0x3a6a50, radius:7},
+  {id:'woodbine', name:'Woodbine Beach', cost:430, color:0x4a9078, radius:6},
+  {id:'earlbales', name:'Earl Bales Park', cost:390, color:0x366034, radius:7},
+  {id:'james', name:'James Gardens', cost:340, color:0x487840, radius:5},
+  {id:'colsmith', name:'Colonel Samuel Smith Park', cost:410, color:0x3d7058, radius:6},
+  {id:'withrow', name:'Withrow Park', cost:270, color:0x4a7540, radius:5},
+  {id:'kew', name:'Kew Gardens', cost:300, color:0x458060, radius:5},
+];
+
+const CATS=[
+  {id:'roads', label:'Roads'},
+  {id:'bridges', label:'Bridges'},
+  {id:'transit', label:'Transit'},
+  {id:'zones', label:'Zones'},
+  {id:'power', label:'Power'},
+  {id:'water', label:'Water'},
+  {id:'safety', label:'Safety'},
+  {id:'education', label:'Education'},
+  {id:'waste', label:'Waste'},
+  {id:'parks', label:'Parks'},
+  {id:'unique', label:'Unique'},
+  {id:'meta', label:'Tools'},
+];
+
+const TOOLS=[
+  // meta
+  {id:'query', cat:'meta', label:'Inspect', letter:'?', color:'#8899a0', cost:0},
+  {id:'bulldoze', cat:'meta', label:'Bulldoze', letter:'X', color:'#555', cost:5},
+  // roads
+  {id:'road', cat:'roads', label:'Street', letter:'Rd', color:'#4a5560', cost:12, road:true},
+  {id:'avenue', cat:'roads', label:'Avenue', letter:'Av', color:'#3d4650', cost:28, road:true},
+  {id:'oneway', cat:'roads', label:'One-way', letter:'1W', color:'#505860', cost:18, road:true},
+  {id:'gravel', cat:'roads', label:'Gravel', letter:'Gv', color:'#6b6358', cost:6, road:true},
+  {id:'highway', cat:'roads', label:'Highway', letter:'HW', color:'#3a4048', cost:45, road:true},
+  {id:'bike', cat:'roads', label:'Bike Lane', letter:'Bk', color:'#3d6b4a', cost:10, road:true},
+  // bridges
+  {id:'bridge', cat:'bridges', label:'Road Bridge', letter:'Br', color:'#8a7a60', cost:120, road:true, bridge:true},
+  {id:'hwybridge', cat:'bridges', label:'Hwy Bridge', letter:'HB', color:'#6a6050', cost:220, road:true, bridge:true},
+  {id:'transitbridge', cat:'bridges', label:'TTC Bridge', letter:'TB', color:'#a03040', cost:180, road:true, bridge:true},
+  // transit
+  {id:'transit', cat:'transit', label:'TTC Line', letter:'T', color:'#c8102e', cost:75, road:true},
+  {id:'metro', cat:'transit', label:'Metro Stn', letter:'M', color:'#b01028', cost:900},
+  {id:'busdepot', cat:'transit', label:'Bus Depot', letter:'Bus', color:'#c45c20', cost:700},
+  {id:'trainpass', cat:'transit', label:'Train Hub', letter:'TR', color:'#4a6080', cost:1600},
+  {id:'traincargo', cat:'transit', label:'Cargo Rail', letter:'CR', color:'#5a5040', cost:1400},
+  {id:'harbor', cat:'transit', label:'Harbor', letter:'Hb', color:'#2a6a8a', cost:1800},
+  {id:'ferry', cat:'transit', label:'Ferry', letter:'Fy', color:'#3a7a9a', cost:1100},
+  {id:'monorail', cat:'transit', label:'Monorail', letter:'MR', color:'#8060a0', cost:1200},
+  // zones
+  {id:'rzone', cat:'zones', label:'R Low', letter:'R↓', color:'#c9a227', cost:20, zone:'res', density:'low'},
+  {id:'rzone_high', cat:'zones', label:'R High', letter:'R↑', color:'#e0b020', cost:40, zone:'res', density:'high'},
+  {id:'czone', cat:'zones', label:'C Low', letter:'C↓', color:'#2a9d8f', cost:25, zone:'com', density:'low'},
+  {id:'czone_high', cat:'zones', label:'C High', letter:'C↑', color:'#1fb5a4', cost:45, zone:'com', density:'high'},
+  {id:'ozone', cat:'zones', label:'Office', letter:'O', color:'#5b7cfa', cost:35, zone:'off', density:'high'},
+  {id:'izone', cat:'zones', label:'Industrial', letter:'I', color:'#a05a2c', cost:28, zone:'ind', density:'low'},
+  {id:'izone_farm', cat:'zones', label:'Farming', letter:'Fm', color:'#8a9a3a', cost:22, zone:'ind', spec:'farm'},
+  {id:'izone_forest', cat:'zones', label:'Forestry', letter:'Fo', color:'#4a6a30', cost:22, zone:'ind', spec:'forest'},
+  {id:'izone_oil', cat:'zones', label:'Oil', letter:'Oil', color:'#3a3a3a', cost:50, zone:'ind', spec:'oil'},
+  {id:'izone_ore', cat:'zones', label:'Ore', letter:'Ore', color:'#6a5a4a', cost:50, zone:'ind', spec:'ore'},
+  {id:'czone_tourism', cat:'zones', label:'Tourism', letter:'Tou', color:'#2a8aaa', cost:40, zone:'com', spec:'tourism'},
+  // power
+  {id:'power', cat:'power', label:'Coal Plant', letter:'Coal', color:'#D9A441', cost:2800, power:6000},
+  {id:'wind', cat:'power', label:'Wind Turbine', letter:'Wnd', color:'#a0c8d8', cost:1200, power:1800},
+  {id:'solar', cat:'power', label:'Solar Farm', letter:'Sol', color:'#e8c860', cost:1600, power:2500},
+  {id:'hydro', cat:'power', label:'Hydro Dam', letter:'Hyd', color:'#4a90b8', cost:3200, power:7000},
+  // water
+  {id:'watertower', cat:'water', label:'Water Tower', letter:'WT', color:'#3E8EC0', cost:1800, water:4500},
+  {id:'waterpump', cat:'water', label:'Water Pump', letter:'WP', color:'#2E7EB0', cost:2200, water:6000},
+  {id:'watertreat', cat:'water', label:'Treatment', letter:'Tx', color:'#4a9aaa', cost:2600, water:5000, treat:true},
+  {id:'drain', cat:'water', label:'Drain Pipe', letter:'Dr', color:'#5a7080', cost:400},
+  // safety
+  {id:'police', cat:'safety', label:'Police', letter:'PD', color:'#3E5C8E', cost:650, svc:'police', radius:9},
+  {id:'fire', cat:'safety', label:'Fire Hall', letter:'FD', color:'#B23A2E', cost:650, svc:'fire', radius:9},
+  {id:'clinic', cat:'safety', label:'Clinic', letter:'Cl', color:'#d07090', cost:800, svc:'health', radius:8},
+  {id:'hospital', cat:'safety', label:'Hospital', letter:'H', color:'#C25B7C', cost:1600, svc:'health', radius:12},
+  // education
+  {id:'school', cat:'education', label:'Elementary', letter:'El', color:'#4C7A9E', cost:550, svc:'edu', radius:7},
+  {id:'highschool', cat:'education', label:'High School', letter:'HS', color:'#3d6a8e', cost:900, svc:'edu', radius:9},
+  {id:'university', cat:'education', label:'University', letter:'U', color:'#2a5080', cost:2400, svc:'edu', radius:14},
+  {id:'library', cat:'education', label:'Library', letter:'Lib', color:'#6a8098', cost:500, svc:'edu', radius:6},
+  {id:'tradeschool', cat:'education', label:'Trade School', letter:'TS', color:'#5a7088', cost:1100, svc:'edu', radius:8},
+  // waste
+  {id:'landfill', cat:'waste', label:'Landfill', letter:'LF', color:'#5a5040', cost:900, waste:8000, pollute:true},
+  {id:'incinerator', cat:'waste', label:'Incinerator', letter:'In', color:'#8a5040', cost:1800, waste:6000, power:800, pollute:true},
+  {id:'recycling', cat:'waste', label:'Recycling', letter:'Rc', color:'#4a8a50', cost:1200, waste:5000},
+  // parks generic + unique
+  {id:'park', cat:'parks', label:'City Park', letter:'P', color:'#3d6b35', cost:90, park:true, radius:5},
+  {id:'plaza', cat:'parks', label:'Plaza', letter:'Pz', color:'#6a8a70', cost:150, park:true, radius:4},
+  {id:'naturereserve', cat:'unique', label:'Nature Reserve', letter:'NR', color:'#2a5028', cost:800, park:true, radius:10},
+  {id:'zoo', cat:'unique', label:'Zoo', letter:'Zoo', color:'#5a8a3a', cost:2200, park:true, radius:8, jobs:80},
+  {id:'amusement', cat:'unique', label:'Amusement', letter:'Am', color:'#c05080', cost:2800, park:true, radius:7, jobs:100},
+  {id:'stadium', cat:'unique', label:'Stadium', letter:'St', color:'#4060a0', cost:3500, jobs:150},
+  {id:'airport', cat:'unique', label:'Airport', letter:'Air', color:'#708098', cost:5000, jobs:200},
+  {id:'cityhall', cat:'unique', label:'City Hall', letter:'CH', color:'#8090a8', cost:2000},
+  {id:'cntower', cat:'unique', label:'CN Tower', letter:'CN', color:'#c8d0d8', cost:4800, jobs:60},
+  {id:'cemetery', cat:'unique', label:'Cemetery', letter:'Cm', color:'#4a5a48', cost:400, park:true, radius:4},
+  {id:'postoffice', cat:'unique', label:'Post Office', letter:'PO', color:'#c0a040', cost:450},
+];
+
+// Add Toronto park tools into parks cat (selectable via parks panel primarily)
+TORONTO_PARKS.forEach(p=>{
+  TOOLS.push({id:'park_'+p.id, cat:'parks', label:p.name, letter:'🍁', color:'#'+p.color.toString(16).padStart(6,'0'), cost:p.cost, park:true, parkId:p.id, parkName:p.name, radius:p.radius, parkColor:p.color});
+});
+
+const ROAD_TYPES=new Set(TOOLS.filter(t=>t.road).map(t=>t.id));
+const ZONE_TYPES=new Set(TOOLS.filter(t=>t.zone).map(t=>t.id));
+const toolById=Object.fromEntries(TOOLS.map(t=>[t.id,t]));
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function inBounds(x,y){return x>=0&&y>=0&&x<COLS&&y<ROWS}
+function noise2(x,y){const n=Math.sin(x*12.9898+y*78.233)*43758.5453;return n-Math.floor(n)}
+
+/* ---- State ---- */
+let grid=[], landmarks=[];
+let money=55000, day=0, year=1, seasonIdx=0, speed=1;
+let taxRates={res:0.09,com:0.10,ind:0.08};
+let selectedTool='road', selectedCat='roads';
+let population=0, jobs=0, unemployment=0, happiness=62;
+let powerCap=0, waterCap=0, wasteCap=0, powerDemand=0, waterDemand=0, wasteDemand=0;
+let demand={r:30,c:15,i:18,o:10};
+let lastBudget={revenue:0,upkeep:0,net:0};
+let avgTraffic=0, avgPollution=0, strikeUntil=-1;
+let hoverTile=null, painting=false;
+let worldDirty=true, structuresDirty=true;
+let labelEls=[];
+
+const logEl=document.getElementById('log');
+function log(msg,ev){const d=document.createElement('div');if(ev)d.className='ev';d.textContent=`[Y${year} ${SEASONS[seasonIdx]}] ${msg}`;logEl.prepend(d);while(logEl.children.length>70)logEl.removeChild(logEl.lastChild)}
+
+function rebuildLabelDom(){
+  const layer=document.getElementById('labels'); layer.innerHTML='';
+  labelEls=landmarks.map(lm=>{const el=document.createElement('div');el.className='map-label';el.textContent=lm.name;el._lm=lm;layer.appendChild(el);return el});
+}
+
+/* ---- Terrain + 401 ---- */
+function makeTerrain(){
+  grid=[]; landmarks=[];
+  for(let x=0;x<COLS;x++){grid[x]=[];for(let y=0;y<ROWS;y++){
+    grid[x][y]={terrain:'land',type:'empty',level:0,landValue:40,pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,parkId:null,parkName:null,spec:null,island:false};
+  }}
+  // Lake Ontario
+  for(let x=0;x<COLS;x++){
+    let shore=ROWS-7+Math.round(Math.sin((x/COLS)*Math.PI)*2.2)+Math.round(Math.sin(x*0.09)*1.1);
+    if(x>COLS*0.78) shore-=Math.round((x-COLS*0.78)*0.15);
+    if(x<COLS*0.12) shore-=1;
+    for(let y=shore;y<ROWS;y++){grid[x][y].terrain='water';grid[x][y].landValue=0}
+  }
+  // Toronto Islands — distinct green parcels
+  const icx=Math.floor(COLS*0.48), icy=ROWS-4;
+  for(let x=icx-8;x<=icx+10;x++)for(let y=icy-2;y<=icy+1;y++){
+    if(!inBounds(x,y)) continue;
+    const dx=(x-icx)/9, dy=(y-icy)/2;
+    if(dx*dx+dy*dy<1.05+noise2(x,y)*0.15){
+      grid[x][y].terrain='land';grid[x][y].type='empty';grid[x][y].landValue=58;grid[x][y].island=true;
+    }
+  }
+  for(let y=ROWS-6;y<ROWS-3;y++){if(inBounds(icx-2,y))grid[icx-2][y].terrain='water';if(inBounds(icx+3,y))grid[icx+3][y].terrain='water'}
+  // Don Valley
+  let rx=Math.floor(COLS*0.62);
+  for(let y=0;y<ROWS-6;y++){
+    rx+=Math.round(Math.sin(y*0.28)*1.4-0.08);
+    const w=y<12?2:(y<30?1:2);
+    for(let k=-w;k<=w;k++){const xx=rx+k;if(inBounds(xx,y)&&grid[xx][y].terrain==='land'){grid[xx][y].terrain='ravine';grid[xx][y].landValue=25}}
+  }
+  // Humber
+  let hx=Math.floor(COLS*0.14);
+  for(let y=0;y<ROWS-5;y++){
+    hx+=Math.round(Math.sin(y*0.22+1)*0.9);
+    for(let k=-1;k<=1;k++){const xx=hx+k;if(inBounds(xx,y)&&grid[xx][y].terrain==='land')grid[xx][y].terrain='ravine'}
+  }
+  // Land values (CBD gravity)
+  const dtx=Math.floor(COLS*0.48), dty=Math.floor(ROWS*0.72);
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    if(grid[x][y].terrain!=='land') continue;
+    let v=32+Math.max(0,38-Math.hypot(x-dtx,y-dty)*1.6);
+    if(nearTerrain(x,y,'water',3)) v+=18;
+    if(nearTerrain(x,y,'ravine',2)) v+=8;
+    if(y<ROWS*0.35) v-=4;
+    grid[x][y].landValue=clamp(Math.round(v+noise2(x,y)*8),15,95);
+  }
+  // HIGHWAY 401 — east-west across mid-north
+  const y401=Math.floor(ROWS*0.28);
+  for(let x=0;x<COLS;x++){
+    if(grid[x][y401].terrain==='ravine'){
+      grid[x][y401].type='hwybridge';
+    } else if(grid[x][y401].terrain==='land'){
+      grid[x][y401].type='highway';
+    } else if(grid[x][y401].terrain==='water'){
+      grid[x][y401].type='hwybridge';
+    }
+    grid[x][y401].level=0;
+  }
+  // dual carriageway feel — second lane north of 401 on land
+  const y401b=y401-1;
+  for(let x=0;x<COLS;x++){
+    if(grid[x][y401b].terrain==='land'){grid[x][y401b].type='highway';grid[x][y401b].level=0}
+    else if(grid[x][y401b].terrain==='ravine'||grid[x][y401b].terrain==='water'){grid[x][y401b].type='hwybridge';grid[x][y401b].level=0}
+  }
+
+  placeLabels(y401);
+  worldDirty=true; structuresDirty=true;
+}
+
+function placeLabels(y401){
+  landmarks=[
+    [Math.floor(COLS*0.48), y401, '401'],
+    [Math.floor(COLS*0.20), y401, 'Highway 401'],
+    [Math.floor(COLS*0.70), y401, '401'],
+    [Math.floor(COLS*0.48), Math.floor(ROWS*0.72), 'Downtown'],
+    [Math.floor(COLS*0.55), Math.floor(ROWS*0.78), 'Distillery'],
+    [Math.floor(COLS*0.22), Math.floor(ROWS*0.55), 'High Park'],
+    [Math.floor(COLS*0.48), ROWS-3, 'Toronto Islands'],
+    [Math.floor(COLS*0.85), Math.floor(ROWS*0.82), 'Scarborough Bluffs'],
+    [Math.floor(COLS*0.12), Math.floor(ROWS*0.75), 'Humber Bay'],
+    [Math.floor(COLS*0.50), Math.floor(ROWS*0.42), 'Yonge Corridor'],
+    [Math.floor(COLS*0.38), Math.floor(ROWS*0.35), 'Yorkville'],
+    [Math.floor(COLS*0.62), 8, 'Don Valley'],
+    [Math.floor(COLS*0.48), Math.floor(ROWS*0.68), 'Harbourfront'],
+    [Math.floor(COLS*0.70), Math.floor(ROWS*0.50), 'East York'],
+    [Math.floor(COLS*0.28), Math.floor(ROWS*0.40), 'The Annex'],
+  ].filter(([x,y])=>inBounds(x,y)).map(([x,y,name])=>({x,y,name}));
+  rebuildLabelDom();
+}
+
+function nearTerrain(x,y,t,r){
+  for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++) if(inBounds(x+dx,y+dy)&&grid[x+dx][y+dy].terrain===t) return true;
+  return false;
+}
+function nearType(x,y,type,r){
+  for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+    if(dx*dx+dy*dy>r*r) continue;
+    if(inBounds(x+dx,y+dy)&&grid[x+dx][y+dy].type===type) return true;
+  }
+  return false;
+}
+function nearPark(x,y,r){
+  for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+    if(dx*dx+dy*dy>r*r) continue;
+    if(!inBounds(x+dx,y+dy)) continue;
+    const def=toolById[grid[x+dx][y+dy].type];
+    if(def&&def.park) return true;
+  }
+  return false;
+}
+function neighbors4(x,y){return [[x-1,y],[x+1,y],[x,y-1],[x,y+1]].filter(([a,b])=>inBounds(a,b))}
+function isRoad(t){return ROAD_TYPES.has(t.type)}
+function hasRoadAccess(x,y){return neighbors4(x,y).some(([a,b])=>isRoad(grid[a][b]))}
+function isZone(t){return ZONE_TYPES.has(t.type)}
+
+makeTerrain();
+
+/* ---- Three.js + custom orbit (RTS / city-builder) ---- */
+const wrap=document.getElementById('wrap');
+const canvas=document.getElementById('game');
+const renderer=new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setClearColor(0x0c1a24);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x152830, 0.0075);
+const camera=new THREE.PerspectiveCamera(42,1,0.1,400);
+/* Default: north of the 401, looking south toward harbour / downtown */
+const y401cam=Math.floor(ROWS*0.28);
+camera.position.set(COLS*0.48+6, 36, y401cam-8);
+
+const ORBIT_DEG=Math.PI/180;
+const orbit={
+  target:new THREE.Vector3(COLS*0.48,0,ROWS*0.62),
+  spherical:new THREE.Spherical(),
+  goal:new THREE.Spherical(),
+  rotating:false, panning:false, paintingActive:false,
+  pointerId:null,
+  lastX:0, lastY:0,
+  damping:0.18,
+  rotateSpeed:0.005,
+  panFactor:0.00125,
+  keyPanFactor:0.62,
+  minR:8, maxR:100,
+  minPhi:18*ORBIT_DEG,
+  maxPhi:82*ORBIT_DEG
+};
+const camKeys={w:false,a:false,s:false,d:false,up:false,down:false,left:false,right:false,shift:false,space:false};
+const _panRight=new THREE.Vector3();
+const _panFwd=new THREE.Vector3();
+const _panUp=new THREE.Vector3(0,1,0);
+const _panEye=new THREE.Vector3();
+const _zoomHitA=new THREE.Vector3();
+const _zoomHitB=new THREE.Vector3();
+const _zoomOffset=new THREE.Vector3();
+const raycaster=new THREE.Raycaster();
+const pointer=new THREE.Vector2();
+const groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+
+orbit.spherical.setFromVector3(camera.position.clone().sub(orbit.target));
+orbit.spherical.makeSafe();
+orbit.spherical.phi=clamp(orbit.spherical.phi, orbit.minPhi, orbit.maxPhi);
+orbit.spherical.radius=clamp(orbit.spherical.radius, orbit.minR, orbit.maxR);
+orbit.goal.copy(orbit.spherical);
+
+function syncSphericalFromGoal(){
+  orbit.spherical.radius=orbit.goal.radius;
+  orbit.spherical.phi=orbit.goal.phi;
+  orbit.spherical.theta=orbit.goal.theta;
+}
+
+function applyOrbitToCamera(){
+  _zoomOffset.setFromSpherical(orbit.spherical);
+  camera.position.copy(orbit.target).add(_zoomOffset);
+  camera.lookAt(orbit.target);
+}
+
+function updateCamera(immediate){
+  if(immediate!==false) syncSphericalFromGoal();
+  applyOrbitToCamera();
+}
+
+/* Single camera step per frame — no double-apply / fighting */
+function stepCamera(dt){
+  const interacting=orbit.rotating||orbit.panning;
+  if(!interacting && !orbit.paintingActive){
+    panOrbitKeys(dt);
+  }
+  if(interacting){
+    syncSphericalFromGoal();
+  } else {
+    /* Frame-rate independent damping; skip when already synced */
+    const dr=orbit.goal.radius-orbit.spherical.radius;
+    const dp=orbit.goal.phi-orbit.spherical.phi;
+    let dTh=orbit.goal.theta-orbit.spherical.theta;
+    while(dTh>Math.PI) dTh-=Math.PI*2;
+    while(dTh<-Math.PI) dTh+=Math.PI*2;
+    if(Math.abs(dr)>1e-5||Math.abs(dp)>1e-5||Math.abs(dTh)>1e-5){
+      const d=1-Math.pow(1-orbit.damping, Math.max(dt,0.001)*60);
+      orbit.spherical.radius+=dr*d;
+      orbit.spherical.phi+=dp*d;
+      orbit.spherical.theta+=dTh*d;
+    }
+  }
+  applyOrbitToCamera();
+}
+
+function getPanAxes(){
+  /* Stable axes from goal pose (avoids damp lag + GC from clone) */
+  _zoomOffset.setFromSpherical(orbit.goal);
+  _panEye.copy(orbit.target).add(_zoomOffset);
+  _panFwd.copy(orbit.target).sub(_panEye);
+  if(_panFwd.lengthSq()<1e-8){
+    camera.getWorldDirection(_panFwd);
+  } else {
+    _panFwd.normalize();
+  }
+  _panRight.crossVectors(_panFwd, _panUp);
+  if(_panRight.lengthSq()<1e-8){
+    _panRight.set(1,0,0);
+  } else {
+    _panRight.normalize();
+  }
+  _panFwd.crossVectors(_panUp, _panRight).normalize();
+}
+
+function clampOrbitTarget(){
+  orbit.target.x=clamp(orbit.target.x,-4,COLS+4);
+  orbit.target.z=clamp(orbit.target.z,-4,ROWS+4);
+  orbit.target.y=0;
+}
+
+function panOrbit(dxPx, dyPx){
+  getPanAxes();
+  const speed=orbit.goal.radius*orbit.panFactor;
+  orbit.target.addScaledVector(_panRight, -dxPx*speed);
+  orbit.target.addScaledVector(_panFwd, -dyPx*speed);
+  clampOrbitTarget();
+}
+
+function panOrbitKeys(dt){
+  let kx=0, kz=0;
+  if(camKeys.a||camKeys.left) kx-=1;
+  if(camKeys.d||camKeys.right) kx+=1;
+  if(camKeys.w||camKeys.up) kz-=1;
+  if(camKeys.s||camKeys.down) kz+=1;
+  if(!kx&&!kz) return;
+  getPanAxes();
+  const speed=orbit.goal.radius*orbit.keyPanFactor*dt;
+  const len=Math.hypot(kx,kz)||1;
+  kx/=len; kz/=len;
+  orbit.target.addScaledVector(_panRight, kx*speed);
+  orbit.target.addScaledVector(_panFwd, -kz*speed);
+  clampOrbitTarget();
+}
+
+function rotateOrbit(dxPx, dyPx){
+  orbit.goal.theta-=dxPx*orbit.rotateSpeed;
+  orbit.goal.phi=clamp(orbit.goal.phi-dyPx*orbit.rotateSpeed, orbit.minPhi, orbit.maxPhi);
+}
+
+function zoomOrbit(deltaY, clientX, clientY){
+  if(orbit.paintingActive) return;
+  const prevR=orbit.goal.radius;
+  const factor=Math.exp(deltaY*0.0011);
+  const nextR=clamp(prevR*factor, orbit.minR, orbit.maxR);
+  if(nextR===prevR) return;
+
+  let bx=null, bz=null;
+  if(clientX!=null){
+    const rect=canvas.getBoundingClientRect();
+    pointer.x=((clientX-rect.left)/rect.width)*2-1;
+    pointer.y=-((clientY-rect.top)/rect.height)*2+1;
+    /* Evaluate zoom against current applied camera */
+    raycaster.setFromCamera(pointer,camera);
+    if(raycaster.ray.intersectPlane(groundPlane,_zoomHitA)){ bx=_zoomHitA.x; bz=_zoomHitA.z; }
+  }
+
+  orbit.goal.radius=nextR;
+  syncSphericalFromGoal();
+  applyOrbitToCamera();
+
+  if(bx!=null){
+    raycaster.setFromCamera(pointer,camera);
+    if(raycaster.ray.intersectPlane(groundPlane,_zoomHitB)){
+      orbit.target.x+=bx-_zoomHitB.x;
+      orbit.target.z+=bz-_zoomHitB.z;
+      clampOrbitTarget();
+      applyOrbitToCamera();
+    }
+  }
+}
+
+const ambient=new THREE.AmbientLight(0xb0c4d0, 0.48);
+scene.add(ambient);
+const sun=new THREE.DirectionalLight(0xfff0d8, 0.95);
+sun.position.set(48,62,18); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.near=1; sun.shadow.camera.far=180;
+sun.shadow.camera.left=-50; sun.shadow.camera.right=50;
+sun.shadow.camera.top=50; sun.shadow.camera.bottom=-50;
+scene.add(sun);
+const fill=new THREE.DirectionalLight(0x5a90a8, 0.28); fill.position.set(-35,22,-45); scene.add(fill);
+const hemi=new THREE.HemisphereLight(0x8eb8c8, 0x2a3a28, 0.22); scene.add(hemi);
+
+/* Lake Ontario underlay — animated teal */
+const waterMat=new THREE.MeshStandardMaterial({color:0x156878, roughness:0.35, metalness:0.18, emissive:0x042028, emissiveIntensity:0.15});
+const waterPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS+28,ROWS+28), waterMat);
+waterPlane.rotation.x=-Math.PI/2; waterPlane.position.set(COLS/2,-0.85,ROWS/2); scene.add(waterPlane);
+/* Harbour depth tint plane (slightly darker, smaller) */
+const harbourMat=new THREE.MeshStandardMaterial({color:0x0a4050, roughness:0.45, metalness:0.12, transparent:true, opacity:0.55});
+const harbourPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS*0.55,10), harbourMat);
+harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(COLS*0.5,-0.72,ROWS-5); scene.add(harbourPlane);
+
+function applySeasonLook(){
+  const s=seasonIdx;
+  if(s===0){ /* Spring — soft cool */
+    ambient.color.setHex(0xb8cdd8); ambient.intensity=0.5;
+    sun.color.setHex(0xfff4e4); sun.intensity=0.92;
+    scene.fog.color.setHex(0x163040); scene.fog.density=0.0072;
+    renderer.setClearColor(0x0d1c28);
+  } else if(s===1){ /* Summer — clearer, warmer */
+    ambient.color.setHex(0xc8d8e0); ambient.intensity=0.55;
+    sun.color.setHex(0xfff8ec); sun.intensity=1.05;
+    scene.fog.color.setHex(0x1a4050); scene.fog.density=0.0058;
+    renderer.setClearColor(0x102838);
+  } else if(s===2){ /* Fall — dusk amber */
+    ambient.color.setHex(0xc0a890); ambient.intensity=0.42;
+    sun.color.setHex(0xffc080); sun.intensity=0.78;
+    scene.fog.color.setHex(0x2a2830); scene.fog.density=0.0085;
+    renderer.setClearColor(0x181820);
+  } else { /* Winter — cool snow light */
+    ambient.color.setHex(0xd0dce8); ambient.intensity=0.58;
+    sun.color.setHex(0xe8f0ff); sun.intensity=0.85;
+    scene.fog.color.setHex(0x203040); scene.fog.density=0.0065;
+    renderer.setClearColor(0x142030);
+  }
+}
+
+const hoverMesh=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.1,0.95), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.35}));
+hoverMesh.visible=false; scene.add(hoverMesh);
+const ghostMesh=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.45,0.7), new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:0.4,depthWrite:false}));
+ghostMesh.visible=false; scene.add(ghostMesh);
+
+let groundMesh=null;
+const structureRoot=new THREE.Group(); scene.add(structureRoot);
+const structureKey=new Map();
+const _dummy=new THREE.Object3D();
+const _color=new THREE.Color();
+
+function landColor(t,x,y){
+  const lv=t.landValue/100;
+  const winter=seasonIdx===3;
+  // Toronto Islands — vivid park green
+  if(t.island){
+    let r=48+noise2(x,y)*12, g=98+noise2(x+1,y)*18, b=52+noise2(x,y+2)*10;
+    if(winter){r=r*0.55+140;g=g*0.55+150;b=b*0.55+160}
+    return (clamp(r,30,200)<<16)|(clamp(g,40,210)<<8)|clamp(b,30,200);
+  }
+  // Shoreline / harbourfront limestone–sand tint
+  if(nearTerrain(x,y,'water',1)){
+    let r=120+lv*20, g=128+lv*15, b=105+lv*10;
+    if(winter){r=180;g=188;b=195}
+    return (clamp(r,60,210)<<16)|(clamp(g,70,210)<<8)|clamp(b,50,200);
+  }
+  // Downtown concrete warm-grey (high land value near CBD)
+  if(lv>0.62){
+    let r=118+lv*35+noise2(x,y)*8, g=118+lv*28, b=112+lv*20;
+    if(winter){r=r*0.7+90;g=g*0.7+95;b=b*0.7+105}
+    return (clamp(r,80,200)<<16)|(clamp(g,80,195)<<8)|clamp(b,75,190);
+  }
+  // Brick midrise / neighbourhood tones
+  if(lv>0.4){
+    let r=128+lv*25+noise2(x,y)*10, g=108+lv*20, b=92+lv*12;
+    if(winter){r=r*0.65+100;g=g*0.65+110;b=b*0.65+120}
+    return (clamp(r,70,200)<<16)|(clamp(g,60,180)<<8)|clamp(b,50,170);
+  }
+  // Outer residential / green fringe
+  let r=95+lv*35, g=118+lv*30, b=88+lv*15;
+  if(t.pollution>20){r+=t.pollution*0.35;g-=t.pollution*0.2}
+  const n=noise2(x,y)*10;
+  if(winter){r=r*0.55+130;g=g*0.55+140;b=b*0.55+150}
+  return (clamp(r+n,40,200)<<16)|(clamp(g,50,200)<<8)|clamp(b,40,180);
+}
+
+function waterTileColor(x,y){
+  const shore=nearTerrain(x,y,'land',1)||nearTerrain(x,y,'ravine',1);
+  const nearIsland=(()=>{for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++) if(inBounds(x+dx,y+dy)&&grid[x+dx][y+dy].island) return true; return false})();
+  if(nearIsland) return 0x1a7088;
+  if(shore) return 0x248898; /* shallow harbour teal */
+  const depth=noise2(x*0.3,y*0.3);
+  return depth>0.55?0x0c4860:0x125868; /* Lake Ontario deep */
+}
+
+function rebuildGround(){
+  if(groundMesh){scene.remove(groundMesh);groundMesh.geometry.dispose();groundMesh.material.dispose()}
+  const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.98,1,0.98), new THREE.MeshStandardMaterial({roughness:0.88, metalness:0.04}), COLS*ROWS);
+  mesh.receiveShadow=true;
+  let i=0;
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y];
+    let h=0.18,y0=0.09,col=landColor(t,x,y);
+    if(t.terrain==='water'){
+      const shore=nearTerrain(x,y,'land',1)||nearTerrain(x,y,'ravine',1);
+      h=shore?0.12:0.08; y0=shore?-0.22:-0.38; col=waterTileColor(x,y);
+    } else if(t.terrain==='ravine'){
+      h=0.38; y0=-0.1; col=seasonIdx===3?0x3a5540:0x1a3820; /* deep Don/Humber green */
+    } else if(t.island){
+      h=0.22; y0=0.11;
+    }
+    _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+    mesh.setMatrixAt(i,_dummy.matrix); _color.setHex(col); mesh.setColorAt(i,_color); i++;
+  }
+  mesh.instanceMatrix.needsUpdate=true; if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
+  groundMesh=mesh; scene.add(mesh); worldDirty=false;
+}
+
+function structureHeight(t){
+  const def=toolById[t.type];
+  if(isRoad(t)) return (def&&def.bridge)?0.18:0.08;
+  if(def&&def.park) return 0.14;
+  if(t.type==='cntower') return 5.8;
+  if(def&&def.power) return def.id==='wind'?2.2:1.3;
+  if(def&&def.water) return def.id==='watertower'?1.9:1.0;
+  if(isZone(t)){
+    if(t.level<=0) return 0.1;
+    const high=def&&def.density==='high';
+    const downtownBoost=t.landValue>70?1.25:1;
+    if(high){
+      /* towers scale hard — skyline feel */
+      return (0.45+t.level*1.15+(t.level>=4?t.level*0.35:0))*downtownBoost;
+    }
+    /* houses → brick midrise */
+    return (0.28+t.level*0.42+(t.level>=3?0.25:0))*downtownBoost;
+  }
+  if(t.type==='stadium'||t.type==='airport') return 1.6;
+  if(t.type==='university'||t.type==='hospital') return 1.3;
+  if(t.type==='cityhall') return 1.8;
+  return 0.85;
+}
+
+function tileColor(t){
+  const def=toolById[t.type];
+  if(def&&def.parkColor) return def.parkColor;
+  if(isRoad(t)){
+    let base=0x3a4048;
+    if(t.type==='highway'||t.type==='hwybridge') base=0x2e3238;
+    else if(t.type==='avenue') base=0x3d4650;
+    else if(t.type==='gravel') base=0x6b6358;
+    else if(t.type==='bike') base=0x3d5a48;
+    else if(t.type==='transit'||t.type==='transitbridge') base=0x6a2830;
+    else if(t.type==='bridge') base=0x5a5040;
+    /* traffic tint — warmer when busy */
+    if(t.traffic>25){
+      const tr=clamp(t.traffic/100,0,1);
+      const r=Math.min(255, ((base>>16)&0xff)+tr*70);
+      const g=Math.max(20, ((base>>8)&0xff)-tr*25);
+      const b=Math.max(20, (base&0xff)-tr*30);
+      return (r<<16)|(g<<8)|b;
+    }
+    return base;
+  }
+  if(def&&def.color && !isZone(t)) return parseInt(def.color.replace('#',''),16);
+  /* Residential: house cream → brick → concrete tower */
+  if(t.type==='rzone'||t.type==='rzone_high'){
+    const pal=t.type==='rzone_high'
+      ?[0xc4b090,0xa89070,0x8a8e8a,0x7a8088,0x6a727c]
+      :[0xd4c4a0,0xc4a070,0xb07850,0x986040,0x805030];
+    return pal[clamp(t.level-1,0,4)];
+  }
+  if(t.type==='czone'||t.type==='czone_high'||t.type==='czone_tourism'){
+    const pal=[0x3aa898,0x2a9088,0x4a6870,0x5a7888,0x6a8898];
+    return pal[clamp(t.level-1,0,4)];
+  }
+  if(t.type==='ozone'){
+    const pal=[0x6a82b0,0x5a7298,0x708090,0x889098,0x98a0a8]; /* glass/concrete office */
+    return pal[clamp(t.level-1,0,4)];
+  }
+  if(t.type.startsWith('izone')){
+    const pal=[0xa05a2c,0x8a4e26,0x734120,0x5c3419,0x452713];
+    return pal[clamp(t.level-1,0,4)];
+  }
+  if(def&&def.color) return parseInt(def.color.replace('#',''),16);
+  return 0x888888;
+}
+
+function disposeObject3D(obj){
+  if(!obj) return;
+  if(obj.children&&obj.children.length){
+    [...obj.children].forEach(c=>disposeObject3D(c));
+  }
+  if(obj.geometry) obj.geometry.dispose();
+  if(obj.material){
+    if(Array.isArray(obj.material)) obj.material.forEach(m=>m.dispose());
+    else obj.material.dispose();
+  }
+}
+
+function clearStructures(){
+  while(structureRoot.children.length){
+    const m=structureRoot.children.pop();
+    structureRoot.remove(m);
+    disposeObject3D(m);
+  }
+  structureKey.clear();
+}
+
+function addWindowEmissive(mesh, w, h, intensity){
+  const winMat=new THREE.MeshStandardMaterial({
+    color:0x1a2430, emissive:0xffe8a0, emissiveIntensity:intensity,
+    roughness:0.3, metalness:0.2
+  });
+  const rows=Math.min(10, Math.max(2, Math.floor(h/0.38)));
+  const cols=3;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      if((r+c+Math.floor(noise2(r,c)*3))%3===0) continue; /* irregular lit windows */
+      const win=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.1,0.02), winMat.clone());
+      win.position.set((c-1)*w*0.28, -h/2+0.25+r*0.32, w/2+0.01);
+      mesh.add(win);
+      const win2=win.clone(); win2.position.z=-(w/2+0.01); win2.rotation.y=Math.PI; mesh.add(win2);
+    }
+  }
+}
+
+function upsertStructure(x,y){
+  const key=x+','+y, t=grid[x][y], old=structureKey.get(key);
+  if(old){structureRoot.remove(old); disposeObject3D(old); structureKey.delete(key)}
+  if(t.type==='empty') return;
+  const def=toolById[t.type];
+  const h=structureHeight(t);
+  const bridge=def&&def.bridge;
+  const elev=bridge?0.72:(isRoad(t)?0.14:0.12);
+  let mesh;
+
+  /* ---- CN Tower ploppable ---- */
+  if(t.type==='cntower'){
+    const g=new THREE.Group();
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.22,4.2,10), new THREE.MeshStandardMaterial({color:0xd0d4d8, roughness:0.35, metalness:0.45}));
+    shaft.position.y=2.1; g.add(shaft);
+    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.38,0.35,12), new THREE.MeshStandardMaterial({color:0xb8c0c8, roughness:0.3, metalness:0.5, emissive:0x334455, emissiveIntensity:0.2}));
+    pod.position.y=3.9; g.add(pod);
+    const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.08,1.6,6), new THREE.MeshStandardMaterial({color:0xc8102e, roughness:0.4, metalness:0.3, emissive:0xc8102e, emissiveIntensity:0.15}));
+    tip.position.y=5.0; g.add(tip);
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.2,0.7), new THREE.MeshStandardMaterial({color:0x6a7078}));
+    base.position.y=0.1; g.add(base);
+    g.position.set(x+0.5, elev, y+0.5); mesh=g;
+  }
+  /* ---- Parks with Toronto foliage ---- */
+  else if(def&&def.park){
+    const g=new THREE.Group();
+    const grassCol=def.parkColor||0x3d6b35;
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.08,0.92), new THREE.MeshStandardMaterial({color:grassCol, roughness:0.95}));
+    base.position.y=0.04; g.add(base);
+    const treeN=3+Math.floor(noise2(x,y)*3);
+    for(let i=0;i<treeN;i++){
+      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,0.18,5), new THREE.MeshStandardMaterial({color:0x4a3020}));
+      const foliage=new THREE.Mesh(
+        new THREE.ConeGeometry(0.14+noise2(x+i,y)*0.06, 0.38+noise2(y,x+i)*0.12, 6),
+        new THREE.MeshStandardMaterial({color:seasonIdx===3?0xc8d4c8:(seasonIdx===2?0x8a6030:0x2a5528), roughness:0.9})
+      );
+      const px=(noise2(x*2+i,y)-0.5)*0.55, pz=(noise2(x,y*2+i)-0.5)*0.55;
+      trunk.position.set(px,0.17,pz); foliage.position.set(px,0.42,pz);
+      g.add(trunk); g.add(foliage);
+    }
+    g.position.set(x+0.5, elev, y+0.5); mesh=g;
+  }
+  /* ---- Wind turbine ---- */
+  else if(t.type==='wind'){
+    const g=new THREE.Group();
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.0,8), new THREE.MeshStandardMaterial({color:0xd0d8e0}));
+    pole.position.y=1; g.add(pole);
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.08,0.12), new THREE.MeshStandardMaterial({color:0xffffff}));
+    blade.position.y=2; g.add(blade);
+    g.position.set(x+0.5,elev,y+0.5); mesh=g;
+  }
+  /* ---- Roads with markings / sidewalks / bridges ---- */
+  else if(isRoad(t)){
+    const g=new THREE.Group();
+    const w=t.type==='avenue'||t.type==='highway'||t.type==='hwybridge'?0.95:0.88;
+    const deckH=bridge?0.16:0.07;
+    const col=tileColor(t);
+    const deck=new THREE.Mesh(new THREE.BoxGeometry(w,deckH,w), new THREE.MeshStandardMaterial({color:col, roughness:0.92, metalness:0.05}));
+    deck.position.y=deckH/2; g.add(deck);
+    /* Avenue sidewalks */
+    if(t.type==='avenue'){
+      const sw=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.05,w*0.98), new THREE.MeshStandardMaterial({color:0x9a9890, roughness:0.95}));
+      const sw2=sw.clone();
+      sw.position.set(-w/2+0.06,0.06,0); sw2.position.set(w/2-0.06,0.06,0);
+      g.add(sw); g.add(sw2);
+    }
+    /* Highway 401 yellow dashed markings */
+    if(t.type==='highway'||t.type==='hwybridge'){
+      const mark=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.02,0.35), new THREE.MeshStandardMaterial({color:0xe8c840, emissive:0x886610, emissiveIntensity:0.08}));
+      mark.position.set(-0.12,deckH+0.015,0); g.add(mark);
+      const mark2=mark.clone(); mark2.position.x=0.12; g.add(mark2);
+      /* shoulder edge */
+      const edge=new THREE.Mesh(new THREE.BoxGeometry(w*0.98,0.015,0.04), new THREE.MeshStandardMaterial({color:0xd0d0c8}));
+      edge.position.set(0,deckH+0.01,-w/2+0.05); g.add(edge);
+      const edge2=edge.clone(); edge2.position.z=w/2-0.05; g.add(edge2);
+    }
+    /* TTC red stripe */
+    if(t.type==='transit'||t.type==='transitbridge'){
+      const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.02,w*0.9), new THREE.MeshStandardMaterial({color:0xc8102e, emissive:0xc8102e, emissiveIntensity:0.1}));
+      stripe.position.y=deckH+0.015; g.add(stripe);
+    }
+    /* Elevated bridge piers */
+    if(bridge){
+      const pierH=elev;
+      const pier=new THREE.Mesh(new THREE.BoxGeometry(0.14,pierH,0.14), new THREE.MeshStandardMaterial({color:0x5a5850, roughness:0.8}));
+      pier.position.set(0,-pierH/2,0); g.add(pier);
+      const cap=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.2), new THREE.MeshStandardMaterial({color:0x6a6860}));
+      cap.position.y=0.02; g.add(cap);
+    }
+    g.position.set(x+0.5, elev, y+0.5); mesh=g;
+  }
+  /* ---- Buildings / zones ---- */
+  else {
+    const g=new THREE.Group();
+    const high=def&&def.density==='high';
+    const unbuilt=isZone(t)&&t.level===0;
+    const w=unbuilt?0.88:(isZone(t)?(high?0.68:0.62):0.72);
+    const col=tileColor(t);
+    const isTower=isZone(t)&&t.level>=3&&(high||t.landValue>65);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,w), new THREE.MeshStandardMaterial({
+      color:col, roughness:isTower?0.45:0.72, metalness:isTower?0.22:0.06,
+      emissive: isTower?0x1a2030:0x000000, emissiveIntensity:isTower?0.08:0
+    }));
+    body.position.y=h/2; body.castShadow=true; body.receiveShadow=true; g.add(body);
+
+    if(isZone(t)&&t.level===1&&!high){
+      /* small house roof */
+      const roof=new THREE.Mesh(new THREE.ConeGeometry(w*0.72,0.22,4), new THREE.MeshStandardMaterial({color:0x6a4030, roughness:0.9}));
+      roof.position.y=h+0.1; roof.rotation.y=Math.PI/4; g.add(roof);
+    } else if(isZone(t)&&t.level===2&&!high){
+      /* brick midrise flat roof parapet */
+      const parapet=new THREE.Mesh(new THREE.BoxGeometry(w*1.02,0.08,w*1.02), new THREE.MeshStandardMaterial({color:0x7a6050}));
+      parapet.position.y=h+0.02; g.add(parapet);
+    } else if(isTower){
+      /* tower crown + window grid */
+      const crown=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,0.15,w*0.5), new THREE.MeshStandardMaterial({color:0xd8dce0, metalness:0.4, roughness:0.3}));
+      crown.position.y=h+0.08; g.add(crown);
+      addWindowEmissive(body, w, h, seasonIdx===2?0.35:0.22);
+    }
+
+    if(unbuilt){
+      body.material.transparent=true; body.material.opacity=0.45; body.material.color.setHex(col);
+      body.scale.set(1,0.35,1); body.position.y=0.06;
+    }
+
+    if(t.type==='cityhall'){
+      const twin=new THREE.Mesh(new THREE.BoxGeometry(0.25,1.4,0.25), new THREE.MeshStandardMaterial({color:0x90a0b8}));
+      twin.position.set(-0.2,1.0,0); g.add(twin);
+      const twin2=twin.clone(); twin2.position.x=0.2; g.add(twin2);
+    }
+
+    g.position.set(x+0.5, elev, y+0.5); mesh=g;
+  }
+  mesh.userData={x,y};
+  structureRoot.add(mesh); structureKey.set(key,mesh);
+}
+
+function rebuildAllStructures(){
+  clearStructures();
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(grid[x][y].type!=='empty') upsertStructure(x,y);
+  structuresDirty=false;
+}
+
+/* ---- UI catalog ---- */
+const catsEl=document.getElementById('cats');
+const toolbar=document.getElementById('toolbar');
+const parksPanel=document.getElementById('parks-panel');
+const parksGrid=document.getElementById('parks-grid');
+
+CATS.forEach(c=>{
+  const b=document.createElement('button'); b.className='cat'+(c.id===selectedCat?' active':''); b.textContent=c.label; b.dataset.cat=c.id;
+  b.onclick=()=>selectCat(c.id); catsEl.appendChild(b);
+});
+
+TORONTO_PARKS.forEach(p=>{
+  const b=document.createElement('button'); b.className='park-btn'; b.innerHTML=`${p.name}<small>$${p.cost}</small>`;
+  b.onclick=()=>{selectTool('park_'+p.id); document.querySelectorAll('.park-btn').forEach(x=>x.classList.remove('selected')); b.classList.add('selected')};
+  parksGrid.appendChild(b);
+});
+
+function selectCat(id){
+  selectedCat=id;
+  document.querySelectorAll('.cat').forEach(b=>b.classList.toggle('active', b.dataset.cat===id));
+  parksPanel.classList.toggle('show', id==='parks');
+  renderToolbar();
+}
+function selectTool(id){
+  selectedTool=id;
+  document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('selected', b.dataset.tool===id));
+  const def=toolById[id];
+  if(def&&def.cat&&def.cat!==selectedCat && def.cat!=='parks'){/* keep */}
+  document.querySelectorAll('.park-btn').forEach((b,i)=>{
+    b.classList.toggle('selected', id==='park_'+TORONTO_PARKS[i].id);
+  });
+}
+function renderToolbar(){
+  toolbar.innerHTML='';
+  const list=TOOLS.filter(t=>t.cat===selectedCat && !(t.parkId)); // Toronto parks via panel
+  // For parks cat also show generic park/plaza
+  list.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='tool'+(t.id===selectedTool?' selected':''); b.dataset.tool=t.id;
+    b.innerHTML=`<div class="ico" style="background:${t.color}">${t.letter}</div><div class="lbl">${t.label}</div><div class="cost">${t.cost?('$'+t.cost):''}</div>`;
+    b.onclick=()=>selectTool(t.id);
+    toolbar.appendChild(b);
+  });
+  if(selectedCat==='parks'){
+    const note=document.createElement('div');
+    note.style.cssText='font-size:10px;color:#8aa0a8;padding:6px';
+    note.textContent='↓ Scroll Toronto parks below';
+    toolbar.appendChild(note);
+  }
+}
+selectCat('roads');
+
+/* ---- Input ---- */
+function pickTile(cx,cy){
+  const rect=canvas.getBoundingClientRect();
+  pointer.x=((cx-rect.left)/rect.width)*2-1;
+  pointer.y=-((cy-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(pointer,camera);
+  const hit=new THREE.Vector3();
+  if(raycaster.ray.intersectPlane(groundPlane,hit)){
+    const x=Math.floor(hit.x), y=Math.floor(hit.z);
+    if(inBounds(x,y)) return {x,y};
+  }
+  return null;
+}
+
+function canPlace(def, tile){
+  if(!def) return false;
+  if(def.bridge) return tile.terrain==='ravine'||tile.terrain==='water'||tile.terrain==='land';
+  if(def.id==='harbor'||def.id==='ferry') return tile.terrain==='land'&&nearTerrain(arguments[2]||0,arguments[3]||0,'water',2) || tile.terrain==='land';
+  return tile.terrain==='land';
+}
+
+function applyTool(pos){
+  if(!pos) return;
+  const {x,y}=pos; const tile=grid[x][y]; const def=toolById[selectedTool];
+  if(!def||selectedTool==='query') return;
+
+  if(selectedTool==='bulldoze'){
+    if(tile.type!=='empty'){
+      if(money<def.cost){flashFunds();return}
+      money-=def.cost; tile.type='empty'; tile.level=0; tile.parkId=null; tile.parkName=null; tile.spec=null; tile.pollution=0;
+      upsertStructure(x,y);
+    }
+    return;
+  }
+
+  if(def.bridge){
+    /* Bridges: ravine/water always; land only if empty or existing road */
+    if(tile.terrain==='ravine'||tile.terrain==='water'){
+      /* ok */
+    } else if(tile.terrain==='land'){
+      if(tile.type!=='empty'&&!isRoad(tile)) return;
+    } else {
+      return;
+    }
+  } else {
+    if(tile.terrain!=='land') return;
+    if(def.zone||def.park||def.power||def.water||def.svc||def.waste||def.jobs||['stadium','airport','cityhall','cntower','postoffice','metro','busdepot','trainpass','traincargo','harbor','ferry','monorail','drain','tradeschool','cemetery','naturereserve','zoo','amusement'].includes(def.id)){
+      if(tile.type!=='empty') return;
+    } else if(def.road){
+      if(tile.type!=='empty'&&!isRoad(tile)) return;
+    }
+  }
+
+  if(tile.type===def.id) return; /* already this tool — don't re-bill */
+  const cost=Number(def.cost)||0;
+  if(money<cost){flashFunds();return}
+  money-=cost;
+  tile.type=def.id; tile.level=0;
+  tile.parkId=def.parkId||null; tile.parkName=def.parkName||null; tile.spec=def.spec||null;
+  upsertStructure(x,y);
+}
+
+let insufficientFlash=0;
+function flashFunds(){insufficientFlash=16}
+
+canvas.addEventListener('pointerdown',e=>{
+  if(orbit.pointerId!=null && orbit.pointerId!==e.pointerId) return;
+  if(e.button===0){
+    const panMod=e.shiftKey||camKeys.space||camKeys.shift;
+    if(panMod){
+      orbit.panning=true; orbit.paintingActive=false; painting=false; orbit.rotating=false;
+      orbit.pointerId=e.pointerId;
+      orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+      syncSphericalFromGoal();
+      canvas.setPointerCapture(e.pointerId);
+    } else {
+      /* Left = paint only — never orbit/pan */
+      painting=true; orbit.paintingActive=true;
+      orbit.rotating=false; orbit.panning=false;
+      orbit.pointerId=e.pointerId;
+      const p=pickTile(e.clientX,e.clientY); hoverTile=p; applyTool(p);
+      canvas.setPointerCapture(e.pointerId);
+    }
+  } else if(e.button===2){
+    if(orbit.paintingActive) return; /* don't steal paint into orbit */
+    orbit.rotating=true; orbit.panning=false; painting=false; orbit.paintingActive=false;
+    orbit.pointerId=e.pointerId;
+    orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    syncSphericalFromGoal();
+    canvas.setPointerCapture(e.pointerId);
+  } else if(e.button===1){
+    e.preventDefault();
+    if(orbit.paintingActive) return;
+    orbit.panning=true; orbit.rotating=false; painting=false; orbit.paintingActive=false;
+    orbit.pointerId=e.pointerId;
+    orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    syncSphericalFromGoal();
+    canvas.setPointerCapture(e.pointerId);
+  }
+});
+canvas.addEventListener('pointermove',e=>{
+  if(orbit.pointerId!=null && e.pointerId!==orbit.pointerId) return;
+  if(orbit.rotating){
+    const dx=e.clientX-orbit.lastX, dy=e.clientY-orbit.lastY;
+    rotateOrbit(dx,dy);
+    syncSphericalFromGoal();
+    applyOrbitToCamera();
+    orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    return;
+  }
+  if(orbit.panning){
+    const dx=e.clientX-orbit.lastX, dy=e.clientY-orbit.lastY;
+    panOrbit(dx,dy);
+    syncSphericalFromGoal();
+    applyOrbitToCamera();
+    orbit.lastX=e.clientX; orbit.lastY=e.clientY;
+    return;
+  }
+  const p=pickTile(e.clientX,e.clientY); hoverTile=p; updateHover(p); updateInspect(p);
+  if(painting&&orbit.paintingActive&&(e.buttons&1)) applyTool(p);
+});
+function endPointer(e){
+  if(orbit.pointerId!=null && e.pointerId!==orbit.pointerId) return;
+  painting=false; orbit.paintingActive=false;
+  orbit.rotating=false; orbit.panning=false;
+  orbit.pointerId=null;
+  try{canvas.releasePointerCapture(e.pointerId)}catch(_){}
+}
+canvas.addEventListener('pointerup',endPointer);
+canvas.addEventListener('pointercancel',endPointer);
+canvas.addEventListener('lostpointercapture',()=>{
+  painting=false; orbit.paintingActive=false; orbit.rotating=false; orbit.panning=false; orbit.pointerId=null;
+});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  if(orbit.paintingActive) return;
+  zoomOrbit(e.deltaY, e.clientX, e.clientY);
+},{passive:false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('auxclick',e=>{if(e.button===1) e.preventDefault()});
+
+window.addEventListener('keydown',e=>{
+  const typing=/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||'');
+  const k=e.key.toLowerCase();
+  if(!typing){
+    if(e.code==='Space'){camKeys.space=true; e.preventDefault()}
+    if(e.key==='Shift') camKeys.shift=true;
+    if(k==='w') camKeys.w=true; if(k==='a') camKeys.a=true; if(k==='s') camKeys.s=true; if(k==='d') camKeys.d=true;
+    if(e.code==='ArrowUp') camKeys.up=true; if(e.code==='ArrowDown') camKeys.down=true;
+    if(e.code==='ArrowLeft') camKeys.left=true; if(e.code==='ArrowRight') camKeys.right=true;
+  }
+  const map={r:'road',z:'rzone',c:'czone',i:'izone',x:'bulldoze',t:'transit',h:'highway',q:'query',b:'bridge'};
+  if(!typing&&map[k]&&!camKeys.space) selectTool(map[k]);
+  if(e.code==='Digit1') setSpeed(0); if(e.code==='Digit2') setSpeed(1); if(e.code==='Digit3') setSpeed(2);
+});
+window.addEventListener('keyup',e=>{
+  const k=e.key.toLowerCase();
+  if(e.code==='Space') camKeys.space=false;
+  if(e.key==='Shift') camKeys.shift=false;
+  if(k==='w') camKeys.w=false; if(k==='a') camKeys.a=false; if(k==='s') camKeys.s=false; if(k==='d') camKeys.d=false;
+  if(e.code==='ArrowUp') camKeys.up=false; if(e.code==='ArrowDown') camKeys.down=false;
+  if(e.code==='ArrowLeft') camKeys.left=false; if(e.code==='ArrowRight') camKeys.right=false;
+});
+window.addEventListener('blur',()=>{
+  camKeys.w=camKeys.a=camKeys.s=camKeys.d=false;
+  camKeys.up=camKeys.down=camKeys.left=camKeys.right=false;
+  camKeys.shift=camKeys.space=false;
+});
+
+function updateHover(pos){
+  if(!pos){hoverMesh.visible=false;ghostMesh.visible=false;return}
+  hoverMesh.visible=true; hoverMesh.position.set(pos.x+0.5,0.22,pos.y+0.5);
+  const def=toolById[selectedTool];
+  if(def&&selectedTool!=='query'&&selectedTool!=='bulldoze'){
+    ghostMesh.visible=true;
+    ghostMesh.material.color.set(def.color||'#fff');
+    ghostMesh.position.set(pos.x+0.5,0.5,pos.y+0.5);
+  } else ghostMesh.visible=false;
+}
+
+/* ---- Simulation ---- */
+function recomputeUtilities(){
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){grid[x][y].powered=false;grid[x][y].watered=false}
+  const pSrc=[], wSrc=[];
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const def=toolById[grid[x][y].type];
+    if(def&&def.power) pSrc.push([x,y]);
+    if(def&&def.water) wSrc.push([x,y]);
+  }
+  flood(pSrc,'powered',32); flood(wSrc,'watered',30);
+}
+function flood(sources,flag,maxD){
+  const q=[], dist=Array.from({length:COLS},()=>Array(ROWS).fill(Infinity));
+  for(const [sx,sy] of sources){dist[sx][sy]=0;q.push([sx,sy]);grid[sx][sy][flag]=true}
+  let qi=0;
+  while(qi<q.length){
+    const [x,y]=q[qi++]; const d=dist[x][y]; if(d>=maxD) continue;
+    for(const [nx,ny] of neighbors4(x,y)){
+      const t=grid[nx][ny];
+      if(t.terrain==='water'&&!isRoad(t)) continue;
+      const ok=isRoad(t)||isZone(t)||t.type==='empty'||toolById[t.type];
+      if(!ok) continue;
+      const nd=d+(isRoad(t)?1:1.5);
+      if(nd<dist[nx][ny]&&nd<=maxD){dist[nx][ny]=nd;t[flag]=true;q.push([nx,ny])}
+    }
+  }
+}
+
+function tick(){
+  day++;
+  const prev=seasonIdx;
+  seasonIdx=Math.floor(day/DAYS)%4;
+  year=1+Math.floor(day/(DAYS*4));
+  if(seasonIdx!==prev){ log(`${SEASONS[seasonIdx]} arrives.`,true); worldDirty=true; structuresDirty=true; applySeasonLook(); }
+  recomputeUtilities();
+
+  let pop=0,jb=0,pCap=0,wCap=0,wasteC=0;
+  let svc={police:0,fire:0,health:0,edu:0,park:0};
+  let roads=0, pollSum=0,pollN=0;
+  const grew=[];
+
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y]; const def=toolById[t.type];
+    t.pollution=Math.max(0,t.pollution*0.92-0.35);
+    if(isZone(t)&&t.level>0){
+      if(def.zone==='res') pop+=t.level*(def.density==='high'?28:16);
+      else if(def.zone==='com') jb+=t.level*(def.density==='high'?20:12)+(def.spec==='tourism'?4:0);
+      else if(def.zone==='off') jb+=t.level*22;
+      else if(def.zone==='ind'){
+        jb+=t.level*(def.spec==='farm'?10:14);
+        if(t.level>0&&(!def.spec||def.spec==='oil'||def.spec==='ore'||!def.spec)){
+          for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++){
+            if(!inBounds(x+dx,y+dy)) continue;
+            const fall=1-Math.hypot(dx,dy)/4;
+            if(fall>0) grid[x+dx][y+dy].pollution=Math.min(100,grid[x+dx][y+dy].pollution+t.level*2*fall*(def.spec==='oil'?1.5:1));
+          }
+        }
+      }
+    }
+    if(def&&def.power) pCap+=def.power;
+    if(def&&def.water) wCap+=def.water;
+    if(def&&def.waste) wasteC+=def.waste;
+    if(def&&def.pollute) for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++) if(inBounds(x+dx,y+dy)) grid[x+dx][y+dy].pollution=Math.min(100,grid[x+dx][y+dy].pollution+1.5);
+    if(def&&def.jobs) jb+=def.jobs;
+    if(def&&def.svc) svc[def.svc]=(svc[def.svc]||0)+1;
+    if(def&&def.park) svc.park++;
+    if(isRoad(t)) roads++;
+    if(t.terrain==='land'){pollSum+=t.pollution;pollN++}
+  }
+  population=pop; jobs=jb; powerCap=pCap; waterCap=wCap; wasteCap=wasteC;
+  powerDemand=pop*0.5+jb*0.7+roads*0.3;
+  waterDemand=pop*0.45+jb*0.35;
+  wasteDemand=pop*0.4+jb*0.2;
+  const powerRatio=powerDemand>0?Math.min(1,powerCap/powerDemand):1;
+  const waterRatio=waterDemand>0?Math.min(1,waterCap/waterDemand):1;
+  const wasteRatio=wasteDemand>0?Math.min(1,wasteCap/Math.max(wasteDemand,1)):1;
+  avgPollution=pollN?pollSum/pollN:0;
+  unemployment=population<15?0:clamp((1-jobs/Math.max(population,1))*100,0,100);
+
+  // traffic
+  const roadTrafficDirty=[];
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(isRoad(grid[x][y])) grid[x][y].traffic=Math.max(0,grid[x][y].traffic*0.7);
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y]; if(!isZone(t)||!t.level) continue;
+    for(const [a,b] of neighbors4(x,y)) if(isRoad(grid[a][b])){
+      const prev=grid[a][b].traffic;
+      grid[a][b].traffic=Math.min(100,grid[a][b].traffic+t.level*2);
+      if(Math.abs(grid[a][b].traffic-prev)>12) roadTrafficDirty.push([a,b]);
+    }
+  }
+  if(day%8===0){ for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(isRoad(grid[x][y])&&grid[x][y].traffic>20) roadTrafficDirty.push([x,y]); }
+  for(const [x,y] of roadTrafficDirty) upsertStructure(x,y);
+
+  // demand
+  const jobRatio=jobs/Math.max(population,1), popRatio=population/Math.max(jobs,1);
+  demand.r=clamp(28+(jobRatio-0.8)*50-taxRates.res*160+(happiness-50)*0.4, -100,100);
+  demand.c=clamp(12+(popRatio-0.7)*45-taxRates.com*150, -100,100);
+  demand.i=clamp(16+(popRatio-0.6)*35-taxRates.ind*140, -100,100);
+  demand.o=clamp(10+(popRatio-0.75)*40-taxRates.com*120, -100,100);
+  if(population===0&&jobs===0){demand.r=40;demand.c=22;demand.i=25;demand.o=15}
+
+  // GROWTH — road → level 1; power+water → higher
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y]; if(!isZone(t)) continue;
+    const def=toolById[t.type];
+    const road=hasRoadAccess(x,y);
+    const powered=t.powered&&powerRatio>0.4;
+    const watered=t.watered&&waterRatio>0.4;
+    let d=demand.r; if(def.zone==='com') d=demand.c; else if(def.zone==='ind') d=demand.i; else if(def.zone==='off') d=demand.o;
+
+    let cap=1;
+    if(def.density==='high'){ cap=def.zone==='res'?5:4; if(t.landValue>50) cap=Math.min(5,cap+1) }
+    else { if(t.landValue>45) cap=2; if(t.landValue>65) cap=3; if(t.landValue>80) cap=4 }
+    if(nearType(x,y,'university',14)||nearType(x,y,'school',7)||nearType(x,y,'highschool',9)) cap=Math.min(5,cap+1);
+    if(t.pollution>55&&def.zone==='res') cap=Math.min(cap,2);
+    t.densityCap=cap;
+
+    const prevL=t.level;
+    // Level 1 with road only (construction) — faster early game
+    if(road && t.level===0 && d>-10){
+      const early=population<80?1.85:1;
+      const chance=(0.18+(d/100)*0.22)*early;
+      if(Math.random()<chance) t.level=1;
+    }
+    // Higher levels need power+water
+    else if(road && powered && watered && t.level>0 && t.level<cap && d>0){
+      let chance=0.06+(d/100)*0.12+(t.landValue/100)*0.04;
+      if(population<120) chance*=1.45;
+      if(nearPark(x,y,6)&&def.zone==='res') chance*=1.3;
+      if(Math.random()<chance) t.level++;
+    }
+    else if(t.level>0){
+      let decay=0;
+      if(!road) decay+=0.04;
+      if(t.level>=2&&(!powered||!watered)) decay+=0.025;
+      if(d<-40) decay+=0.02;
+      if(Math.random()<decay) t.level--;
+    }
+    if(t.level!==prevL) grew.push([x,y]);
+  }
+  for(const [x,y] of grew) upsertStructure(x,y);
+
+  if(day%12===0) refreshLandValue();
+  // happiness
+  const svcScore=(svc.police*40+svc.fire*35+(svc.health||0)*50+(svc.edu||0)*40+svc.park*22)/Math.max(population+jobs,50);
+  const taxB=(taxRates.res+taxRates.com+taxRates.ind)/3*100;
+  const target=clamp(40+clamp(svcScore,0,35)+(powerRatio-1)*20+(waterRatio-1)*15+(wasteRatio-1)*12-taxB*0.5-unemployment*0.2-avgPollution*0.18,0,100);
+  happiness+=(target-happiness)*0.06;
+
+  if(day%30===0) runBudget(svc,roads);
+  if(Math.random()<0.0003&&population>180&&day>strikeUntil+80){strikeUntil=day+14;happiness-=6;log('TTC strike for 2 weeks.',true)}
+
+  updateUI(powerRatio,waterRatio,wasteRatio);
+}
+
+function refreshLandValue(){
+  const dtx=Math.floor(COLS*0.48), dty=Math.floor(ROWS*0.72);
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y]; if(t.terrain!=='land') continue;
+    let v=28+Math.max(0,22-Math.hypot(x-dtx,y-dty)*0.9);
+    if(nearTerrain(x,y,'water',4)) v+=14;
+    if(nearPark(x,y,6)) v+=12;
+    if(nearType(x,y,'highway',3)||nearType(x,y,'hwybridge',3)) v+=4;
+    if(t.pollution>30) v-=t.pollution*0.18;
+    if(nearType(x,y,'university',10)||nearType(x,y,'school',6)) v+=6;
+    t.landValue=clamp(Math.round(v),5,100);
+  }
+  worldDirty=true;
+}
+
+function runBudget(svc,roads){
+  let aR=0,aC=0,aI=0;
+  for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
+    const t=grid[x][y]; if(!t.level||!isZone(t)) continue;
+    const def=toolById[t.type]; const av=t.landValue*t.level;
+    if(def.zone==='res') aR+=av; else if(def.zone==='com'||def.zone==='off') aC+=av; else aI+=av;
+  }
+  const revenue=Math.round(aR*taxRates.res*0.9+aC*taxRates.com*1.1+aI*taxRates.ind*0.95+Math.min(population,jobs)*0.12);
+  const upkeep=Math.round(roads*1.3+svc.police*90+svc.fire*90+(svc.health||0)*120+(svc.edu||0)*70+svc.park*14+(powerCap/1000)*8+(waterCap/1000)*7+(wasteCap/1000)*5);
+  const net=revenue-upkeep; money+=net; lastBudget={revenue,upkeep,net};
+  log(`Budget $${revenue.toLocaleString()} in / $${upkeep.toLocaleString()} out · net ${net>=0?'+':''}$${net.toLocaleString()}.`);
+}
+
+function updateInspect(pos){
+  const el=document.getElementById('inspect');
+  if(!pos){el.innerHTML='Hover a tile.';return}
+  const t=grid[pos.x][pos.y]; const def=toolById[t.type];
+  let name=def?def.label:(t.type==='empty'?'Vacant':'Unknown');
+  if(t.parkName) name=t.parkName;
+  const terrain=t.terrain==='water'?'Lake Ontario':t.terrain==='ravine'?'Ravine':'Land';
+  let extra='';
+  if(isZone(t)) extra=`Density ${t.level}/${t.densityCap} · Road ${hasRoadAccess(pos.x,pos.y)?'✓':'✗'} · Power ${t.powered?'✓':'✗'} · Water ${t.watered?'✓':'✗'}`;
+  el.innerHTML=`<div class="title">${name}</div>${terrain}<br>Land value <b>${t.landValue}</b> · Pollution <b>${Math.round(t.pollution)}</b>${extra?`<br>${extra}`:''}`;
+}
+
+function updateUI(pr,wr,waster){
+  if(!Number.isFinite(money)) money=0;
+  const m=document.getElementById('stat-money'); m.textContent='$'+Math.round(money).toLocaleString(); m.className='val'+(money<0?' bad':'');
+  document.getElementById('stat-pop').textContent=population.toLocaleString();
+  document.getElementById('stat-jobs').textContent=jobs.toLocaleString();
+  const u=document.getElementById('stat-unemp'); u.textContent=Math.round(unemployment)+'%'; u.className='val'+(unemployment>15?' bad':' good');
+  document.getElementById('stat-date').textContent=`Y${year} ${SEASONS[seasonIdx]}`;
+  const p=document.getElementById('stat-power'); p.textContent=Math.round(pr*100)+'%'; p.className='val'+(pr<1?' bad':' good');
+  const w=document.getElementById('stat-water'); w.textContent=Math.round(wr*100)+'%'; w.className='val'+(wr<1?' bad':' good');
+  const ws=document.getElementById('stat-waste'); ws.textContent=wasteDemand<1?'OK':(Math.round(waster*100)+'%'); ws.className='val'+(waster<1&&wasteDemand>0?' bad':' good');
+  setRci('rci-r',demand.r); setRci('rci-c',demand.c); setRci('rci-i',demand.i); setRci('rci-o',demand.o);
+  document.getElementById('happiness-bar').style.width=happiness+'%';
+  document.getElementById('hap-d').innerHTML=`Score <b>${Math.round(happiness)}</b>`;
+  document.getElementById('econ').innerHTML=`Last: <b>$${lastBudget.revenue.toLocaleString()}</b> / <b>$${lastBudget.upkeep.toLocaleString()}</b><br>Net <b>${lastBudget.net>=0?'+':''}$${lastBudget.net.toLocaleString()}</b>`;
+
+  const tip=document.getElementById('tip');
+  // Aggressive tips based on hover or city state
+  let missing='';
+  if(hoverTile&&isZone(grid[hoverTile.x][hoverTile.y])){
+    const t=grid[hoverTile.x][hoverTile.y];
+    if(!hasRoadAccess(hoverTile.x,hoverTile.y)) missing='This zone needs a <strong>road</strong> beside it.';
+    else if(t.level===0) missing='Road connected — waiting for first homes to appear…';
+    else if(!t.powered) missing='Needs <strong>power</strong> (place plant + connect via roads).';
+    else if(!t.watered) missing='Needs <strong>water</strong> (tower/pump + road network).';
+  }
+  if(missing){ tip.className='hud-tip warn'; tip.innerHTML=missing; }
+  else if(population===0){ tip.className='hud-tip'; tip.innerHTML='<strong>Get population:</strong> Road south from the <b>401</b> → Zone <b>R Low</b> beside road → place <b>Coal/Wind</b> + <b>Water Tower</b> on the road network → wait (speed ▶▶).'; }
+  else { tip.className='hud-tip'; tip.innerHTML='<strong>Toronto grows.</strong> Higher density needs power+water. Parks & schools raise land value.'; }
+}
+function setRci(id,val){const el=document.getElementById(id);const pct=Math.abs(val)/2; if(val>=0){el.style.left='50%';el.style.width=pct+'%'}else{el.style.left=(50-pct)+'%';el.style.width=pct+'%'}}
+
+['r','c','i'].forEach(k=>{
+  const sl=document.getElementById('tax-'+k), lab=document.getElementById('tax-'+k+'-v');
+  const key=k==='r'?'res':k==='c'?'com':'ind';
+  sl.oninput=()=>{taxRates[key]=sl.value/100;lab.textContent=sl.value+'%'};
+});
+
+let tickHandle=null;
+function setSpeed(s){
+  speed=s;
+  document.getElementById('btn-pause').classList.toggle('active',s===0);
+  document.getElementById('btn-normal').classList.toggle('active',s===1);
+  document.getElementById('btn-fast').classList.toggle('active',s===2);
+  if(tickHandle) clearInterval(tickHandle);
+  if(s>0) tickHandle=setInterval(tick, s===1?320:90);
+}
+document.getElementById('btn-pause').onclick=()=>setSpeed(0);
+document.getElementById('btn-normal').onclick=()=>setSpeed(1);
+document.getElementById('btn-fast').onclick=()=>setSpeed(2);
+
+document.getElementById('btn-save').onclick=()=>{
+  try{localStorage.setItem('metroTorontoCS',JSON.stringify({grid,money,day,taxRates,seasonIdx,year,happiness,strikeUntil,v:4}));log('Saved.')}
+  catch(e){log('Save failed',true)}
+};
+document.getElementById('btn-load').onclick=()=>{
+  try{
+    const raw=localStorage.getItem('metroTorontoCS'); if(!raw){log('No save.',true);return}
+    const s=JSON.parse(raw); grid=s.grid; money=Number(s.money); if(!Number.isFinite(money)) money=55000;
+    day=Number(s.day)||0; taxRates=s.taxRates||taxRates; seasonIdx=Number(s.seasonIdx)||0; year=Number(s.year)||1;
+    happiness=Number(s.happiness); if(!Number.isFinite(happiness)) happiness=60; strikeUntil=s.strikeUntil??-1;
+    placeLabels(Math.floor(ROWS*0.28)); worldDirty=true; structuresDirty=true; applySeasonLook();
+    recomputeUtilities(); log('Loaded.');
+  }catch(e){log('Load failed',true)}
+};
+document.getElementById('btn-reset').onclick=()=>{
+  if(!confirm('New city?')) return;
+  makeTerrain(); money=55000; day=0; year=1; seasonIdx=0; happiness=62; strikeUntil=-1; lastBudget={revenue:0,upkeep:0,net:0};
+  applySeasonLook(); logEl.innerHTML=''; log('New Toronto — Highway 401 is ready. Expand south toward the harbour.');
+};
+
+function resize(){const w=wrap.clientWidth,h=wrap.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h,false)}
+window.addEventListener('resize',resize); resize(); updateCamera();
+
+function projectLabels(){
+  const w=wrap.clientWidth,h=wrap.clientHeight;
+  for(const el of labelEls){
+    const v=new THREE.Vector3(el._lm.x+0.5,1.2,el._lm.y+0.5); v.project(camera);
+    if(v.z<-1||v.z>1||Math.abs(v.x)>1.35||Math.abs(v.y)>1.35){el.style.display='none';continue}
+    el.style.display='block'; el.style.left=((v.x*0.5+0.5)*w)+'px'; el.style.top=((-v.y*0.5+0.5)*h)+'px';
+  }
+}
+
+let _camLastT=performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  if(worldDirty) rebuildGround();
+  if(structuresDirty) rebuildAllStructures();
+  const now=performance.now();
+  const dt=Math.min(0.05,(now-_camLastT)*0.001);
+  _camLastT=now;
+  stepCamera(dt);
+  const t=now*0.001;
+  /* Lake Ontario teal shimmer */
+  const pulse=0.5+0.5*Math.sin(t*0.7);
+  waterMat.color.setRGB(0.08+pulse*0.02, 0.38+Math.sin(t*0.9)*0.04, 0.45+Math.cos(t*0.6)*0.03);
+  waterMat.emissiveIntensity=0.12+pulse*0.06;
+  harbourMat.opacity=0.45+0.1*Math.sin(t*0.5);
+  if(insufficientFlash>0){renderer.setClearColor(0x3a1520);insufficientFlash--; if(insufficientFlash===0) applySeasonLook();}
+  renderer.render(scene,camera); projectLabels();
+}
+
+const guideEl=document.getElementById('guide');
+const guideBtn=document.getElementById('guide-dismiss');
+if(guideBtn) guideBtn.onclick=()=>{ if(guideEl) guideEl.classList.add('hidden'); try{localStorage.setItem('metroTorontoGuide','1')}catch(_){} };
+try{ if(localStorage.getItem('metroTorontoGuide')==='1' && guideEl) guideEl.classList.add('hidden'); }catch(_){}
+
+applySeasonLook();
+rebuildGround(); rebuildAllStructures(); setSpeed(1); animate();
+log('Metro Builder Toronto ready. Highway 401 spans the north — harbour ahead.');
+log('Tip: Connect a street south from the 401, zone R Low beside it, add power + water.');
+log('Tip: LMB paint · RMB orbit · MMB / Shift+LMB / Space+LMB pan · wheel zoom · WASD/arrows pan.');
+} /* end startGame */
+})();
+</script>
+</body>
+</html>
