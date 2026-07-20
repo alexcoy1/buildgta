@@ -1342,6 +1342,7 @@ function restoreCameraFromSave(s){
   updateCamera();
 }
 function recountPopulationFromGrid(){
+  /* Always full sparse tileMap / grid — never the streamed mesh window */
   let pop=0;
   forEachActive((x,y,t)=>{
     const def=toolById[t.type];
@@ -1596,6 +1597,7 @@ function rebuildActiveTiles(){
   }
 }
 function forEachActive(fn){
+  /* Full simulation domain — independent of camera / chunk stream */
   if(LARGE_MAP){
     for(const [k,t] of tileMap){
       if(t.type==='empty' && !t.burning && !t.flooded) continue;
@@ -1703,23 +1705,25 @@ function nearTerrain(x,y,t,r){
 function nearType(x,y,type,r){
   for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
     if(dx*dx+dy*dy>r*r) continue;
-    if(inBounds(x+dx,y+dy)&&grid[x+dx][y+dy].type===type) return true;
+    const nt=peekTile(x+dx,y+dy);
+    if(nt&&nt.type===type) return true;
   }
   return false;
 }
 function nearPark(x,y,r){
   for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
     if(dx*dx+dy*dy>r*r) continue;
-    if(!inBounds(x+dx,y+dy)) continue;
-    const def=toolById[grid[x+dx][y+dy].type];
+    const nt=peekTile(x+dx,y+dy);
+    if(!nt) continue;
+    const def=toolById[nt.type];
     if(def&&def.park) return true;
   }
   return false;
 }
 function neighbors4(x,y){return [[x-1,y],[x+1,y],[x,y-1],[x,y+1]].filter(([a,b])=>inBounds(a,b))}
-function isRoad(t){return ROAD_TYPES.has(t.type)}
-function hasRoadAccess(x,y){return neighbors4(x,y).some(([a,b])=>isRoad(grid[a][b]))}
-function isZone(t){return ZONE_TYPES.has(t.type)}
+function isRoad(t){return !!(t&&ROAD_TYPES.has(t.type))}
+function hasRoadAccess(x,y){return neighbors4(x,y).some(([a,b])=>{ const nt=peekTile(a,b); return nt&&isRoad(nt); })}
+function isZone(t){return !!(t&&ZONE_TYPES.has(t.type))}
 
 makeTerrain();
 money=Number(gameSettings.money); if(!Number.isFinite(money)) money=55000;
@@ -1833,6 +1837,7 @@ function stepCamera(dt){
   applyOrbitToCamera();
   if(LARGE_MAP){
     try{ refreshGroundInstances(); }catch(err){ console.warn('ground refresh', err); }
+    try{ refreshStructureStream(false); }catch(err){ console.warn('structure stream', err); }
   }
 }
 
@@ -2312,11 +2317,12 @@ function tripFind(sx,sy,maxSteps,wantZones){
     const nbs=neighbors4(x,y);
     for(let i=0;i<nbs.length;i++){
       const nx=nbs[i][0], ny=nbs[i][1];
-      if(!isRoad(grid[nx][ny])) continue;
+      const rt=peekTile(nx,ny);
+      if(!rt||!isRoad(rt)) continue;
       const ni=nx*ROWS+ny;
       if(seen[ni]===stamp) continue;
       /* congestion cost: busy roads cost extra “distance” */
-      const cost=1+(grid[nx][ny].traffic>55?1:0)+(fundRoads<0.75?1:0);
+      const cost=1+(rt.traffic>55?1:0)+(fundRoads<0.75?1:0);
       if(d+cost>maxSteps) continue;
       seen[ni]=stamp; parent[ni]=x*ROWS+y;
       q.push(nx,ny,d+cost);
@@ -2529,14 +2535,39 @@ function roadDeckElev(x,y,t){
   return 0.12;
 }
 
-/* Near-camera 3D tiles stream in a window; full extent always drawn via LOD plane */
+/* Near-camera 3D tiles stream in a window; full extent always drawn via LOD plane.
+   CRITICAL: stream window is VISUAL ONLY — never delete tileMap entries, never zero
+   zone levels, never recount pop/jobs from what's currently meshed. */
 const CHUNK=56;
 const STREAM_MAX_R=72; /* must match pool — keep rebuilds cheap so paint stays responsive */
 const STREAM_SIDE=STREAM_MAX_R*2+1;
 let groundChunkKey='';
+let structureChunkKey='';
 let groundPool=null;
 let mapLodMesh=null;
 let _groundRefreshAt=0;
+let _structRefreshAt=0;
+
+function getStreamWindow(){
+  if(!LARGE_MAP) return {x0:0, x1:COLS-1, y0:0, y1:ROWS-1, r:0, key:'full'};
+  const cx=clamp(Math.floor(orbit.target.x), 0, COLS-1);
+  const cy=clamp(Math.floor(orbit.target.z), 0, ROWS-1);
+  const r=Math.min(STREAM_MAX_R, Math.max(CHUNK, Math.floor(orbit.spherical.radius*0.85)));
+  const x0=Math.max(0, cx-r), x1=Math.min(COLS-1, cx+r);
+  const y0=Math.max(0, cy-r), y1=Math.min(ROWS-1, cy+r);
+  const q=8;
+  const key=((x0/q)|0)+','+((y0/q)|0)+','+((x1/q)|0)+','+((y1/q)|0)+','+((r/q)|0);
+  return {x0,x1,y0,y1,r,cx,cy,key};
+}
+function inStreamWindow(x,y,w){
+  return x>=w.x0 && x<=w.x1 && y>=w.y0 && y<=w.y1;
+}
+/* Read tile without creating sparse empties (LARGE_MAP) — sim/visual helpers */
+function peekTile(x,y){
+  if(!inBounds(x,y)) return null;
+  if(!LARGE_MAP) return grid[x][y];
+  return tileMap.get(tileKey(x,y))||null;
+}
 
 function buildFullMapLod(){
   if(mapLodMesh||!terrainMask) return;
@@ -2623,23 +2654,18 @@ function rebuildGround(){
   refreshGroundInstances();
 }
 
-/* Update ground in place — chunked on large maps so VRAM stays sane */
+/* Update ground in place — chunked on large maps so VRAM stays sane.
+   Visual only: reads terrainMask / land-value helpers — never mutates tileMap or stats. */
 function refreshGroundInstances(){
   if(!groundMesh) return;
-  let x0=0, x1=COLS-1, y0=0, y1=ROWS-1;
+  const win=getStreamWindow();
+  let x0=win.x0, x1=win.x1, y0=win.y0, y1=win.y1;
   if(LARGE_MAP){
-    const cx=clamp(Math.floor(orbit.target.x), 0, COLS-1);
-    const cy=clamp(Math.floor(orbit.target.z), 0, ROWS-1);
-    const r=Math.min(STREAM_MAX_R, Math.max(CHUNK, Math.floor(orbit.spherical.radius*0.85)));
-    x0=Math.max(0, cx-r); x1=Math.min(COLS-1, cx+r);
-    y0=Math.max(0, cy-r); y1=Math.min(ROWS-1, cy+r);
-    const q=8;
-    const key=((x0/q)|0)+','+((y0/q)|0)+','+((x1/q)|0)+','+((y1/q)|0)+','+((r/q)|0);
-    if(key===groundChunkKey && !worldDirty) return;
+    if(win.key===groundChunkKey && !worldDirty) return;
     const now=performance.now();
     if(!worldDirty && now-_groundRefreshAt<90) return;
     _groundRefreshAt=now;
-    groundChunkKey=key;
+    groundChunkKey=win.key;
   }
   let iLand=0, iShore=0, iUrban=0, iIsland=0, iWater=0, iRav=0;
   const hideMat=new THREE.Matrix4().makeScale(0.001,0.001,0.001);
@@ -2786,14 +2812,33 @@ function roadNeighborSig(x,y){
     if(!dx&&!dy) continue;
     const nx=x+dx, ny=y+dy;
     if(!inBounds(nx,ny)){ s+='.'; continue; }
-    const nt=grid[nx][ny];
-    s+=isRoad(nt)?(nt.type[0]+roadDeckElev(nx,ny,nt).toFixed(2)):'-';
+    const nt=peekTile(nx,ny);
+    s+=(nt&&isRoad(nt))?(nt.type[0]+roadDeckElev(nx,ny,nt).toFixed(2)):'-';
   }
-  return s+':'+roadDeckElev(x,y,grid[x][y]).toFixed(2);
+  const self=peekTile(x,y)||grid[x][y];
+  return s+':'+roadDeckElev(x,y,self).toFixed(2);
 }
 
-function upsertStructure(x,y){
-  const key=x+','+y, t=grid[x][y], old=structureKey.get(key);
+function upsertStructure(x,y,opts){
+  const key=x+','+y;
+  /* Prefer sparse tileMap entry — never invent an empty cell that would wipe sim state */
+  const t=LARGE_MAP?(tileMap.get(tileKey(x,y))||null):grid[x][y];
+  if(!t){
+    const oldMissing=structureKey.get(key);
+    if(oldMissing){structureRoot.remove(oldMissing); disposeObject3D(oldMissing); structureKey.delete(key)}
+    return;
+  }
+  const force=!!(opts&&opts.force);
+  /* Visual stream: out-of-window tiles keep sim state; only the mesh is dropped */
+  if(LARGE_MAP && !force){
+    const win=getStreamWindow();
+    if(!inStreamWindow(x,y,win)){
+      const oldOut=structureKey.get(key);
+      if(oldOut){structureRoot.remove(oldOut); disposeObject3D(oldOut); structureKey.delete(key)}
+      return;
+    }
+  }
+  const old=structureKey.get(key);
   const sig=structureSig(t)+(isRoad(t)?'|'+roadNeighborSig(x,y):'');
   /* Keep existing mesh if nothing visual changed — stops flicker */
   if(old && t.type!=='empty' && old.userData && old.userData.sig===sig) return;
@@ -2903,7 +2948,8 @@ function upsertStructure(x,y){
     const linked=[false,false,false,false];
     for(let di=0;di<4;di++){
       const nx=x+dirs[di][0], ny=y+dirs[di][1];
-      linked[di]=inBounds(nx,ny)&&isRoad(grid[nx][ny]);
+      const nt=peekTile(nx,ny);
+      linked[di]=!!(nt&&isRoad(nt));
       if(linked[di]) mask|=bits[di];
     }
     const linkCount=(linked[0]?1:0)+(linked[1]?1:0)+(linked[2]?1:0)+(linked[3]?1:0);
@@ -3169,8 +3215,38 @@ function upsertStructure(x,y){
 
 function rebuildAllStructures(){
   clearStructures();
-  forEachActive((x,y,t)=>{ if(t.type!=='empty') upsertStructure(x,y); });
+  structureChunkKey='';
+  /* LARGE_MAP: only mesh the stream window — full tileMap still owns sim/pop */
+  if(LARGE_MAP) refreshStructureStream(true);
+  else forEachActive((x,y,t)=>{ if(t.type!=='empty') upsertStructure(x,y,{force:true}); });
   structuresDirty=false;
+}
+
+/* Visual-only building LOD: dispose/restore meshes from tileMap. Never touches levels/pop. */
+function refreshStructureStream(force){
+  if(!LARGE_MAP) return;
+  const win=getStreamWindow();
+  const now=performance.now();
+  if(!force && win.key===structureChunkKey && now-_structRefreshAt<90) return;
+  _structRefreshAt=now;
+  structureChunkKey=win.key;
+
+  for(const [key, mesh] of [...structureKey.entries()]){
+    const parts=key.split(',');
+    const x=parts[0]|0, y=parts[1]|0;
+    if(!inStreamWindow(x,y,win)){
+      structureRoot.remove(mesh);
+      disposeObject3D(mesh);
+      structureKey.delete(key);
+    }
+  }
+
+  for(const [k,t] of tileMap){
+    if(t.type==='empty') continue;
+    const x=(k/ROWS)|0, y=k%ROWS;
+    if(!inStreamWindow(x,y,win)) continue;
+    upsertStructure(x,y);
+  }
 }
 
 /* ---- UI catalog ---- */
@@ -3370,12 +3446,13 @@ function applyTool(pos){
       }
       tile.type='empty'; tile.level=0; tile.parkId=null; tile.parkName=null; tile.spec=null; tile.pollution=0;
       tile.buildPhase=0; tile.burning=false; tile.flooded=false; tile.zoneAge=0; tile.abandoned=false;
-      upsertStructure(x,y);
+      upsertStructure(x,y,{force:true});
       if(wasRoad){
         for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
           if(!dx&&!dy) continue;
           const a=x+dx, b=y+dy;
-          if(inBounds(a,b)&&isRoad(grid[a][b])) upsertStructure(a,b);
+          const nt=peekTile(a,b);
+          if(nt&&isRoad(nt)) upsertStructure(a,b,{force:true});
         }
         refreshRoadList();
       }
@@ -3451,22 +3528,25 @@ function applyTool(pos){
     for(let dx=-(def.radius||9);dx<=(def.radius||9);dx++)for(let dy=-(def.radius||9);dy<=(def.radius||9);dy++){
       if(dx*dx+dy*dy>(def.radius||9)*(def.radius||9)) continue;
       const nx=x+dx, ny=y+dy; if(!inBounds(nx,ny)) continue;
-      if(grid[nx][ny].burning){ grid[nx][ny].burning=false; upsertStructure(nx,ny); }
+      const nt=peekTile(nx,ny);
+      if(nt&&nt.burning){ nt.burning=false; upsertStructure(nx,ny,{force:true}); }
     }
   }
   if(def.id==='drain'||def.treat){
     for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++){
       const nx=x+dx, ny=y+dy; if(!inBounds(nx,ny)) continue;
-      if(grid[nx][ny].flooded){ grid[nx][ny].flooded=false; upsertStructure(nx,ny); }
+      const nt=peekTile(nx,ny);
+      if(nt&&nt.flooded){ nt.flooded=false; upsertStructure(nx,ny,{force:true}); }
     }
   }
-  upsertStructure(x,y);
+  upsertStructure(x,y,{force:true});
   /* Refresh nearby road/bridge meshes so ramps + fillets update (2-tile radius) */
   if(def.road||def.bridge){
     for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
       if(!dx&&!dy) continue;
       const a=x+dx, b=y+dy;
-      if(inBounds(a,b)&&isRoad(grid[a][b])) upsertStructure(a,b);
+      const nt=peekTile(a,b);
+      if(nt&&isRoad(nt)) upsertStructure(a,b,{force:true});
     }
     refreshRoadList();
   }
@@ -3816,7 +3896,9 @@ function flood(sources,flag,maxD){
   const seen=new Int32Array(COLS*ROWS);
   const stamp=day+1+(flag==='powered'?100000:200000);
   for(const [sx,sy] of sources){
-    const si=sx*ROWS+sy; seen[si]=stamp; q.push(sx,sy,0); grid[sx][sy][flag]=true;
+    const si=sx*ROWS+sy; seen[si]=stamp; q.push(sx,sy,0);
+    const st=peekTile(sx,sy)||(LARGE_MAP?ensureTile(sx,sy):grid[sx][sy]);
+    st[flag]=true;
   }
   let qi=0;
   while(qi<q.length){
@@ -3825,7 +3907,12 @@ function flood(sources,flag,maxD){
     const nbs=neighbors4(x,y);
     for(let i=0;i<nbs.length;i++){
       const nx=nbs[i][0], ny=nbs[i][1];
-      const t=grid[nx][ny];
+      /* Do not ensureTile here — streaming/flood must not spawn empty sim cells */
+      let t=peekTile(nx,ny);
+      if(!t){
+        /* Allow traversal only onto already-built sparse tiles; skip virgin land */
+        continue;
+      }
       if(t.terrain==='water'&&!isRoad(t)) continue;
       if(!(isRoad(t)||isZone(t)||t.type==='empty'||toolById[t.type])) continue;
       const ni=nx*ROWS+ny;
@@ -3855,6 +3942,7 @@ function tick(){
   const zones=[];
   const doPollution=(day%4===0);
 
+  /* Recount from FULL tileMap — never from streamed meshes / camera window */
   forEachActive((x,y,t)=>{
     const def=toolById[t.type];
     if(doPollution) t.pollution=Math.max(0,t.pollution*0.85-0.5);
@@ -3867,7 +3955,10 @@ function tick(){
         else if(def.zone==='ind'){
           jb+=t.level*(def.spec==='farm'?10:14);
           if(doPollution && t.level>0 && def.spec!=='farm' && def.spec!=='forest'){
-            for(const [a,b] of neighbors4(x,y)) grid[a][b].pollution=Math.min(100,grid[a][b].pollution+t.level*1.2);
+            for(const [a,b] of neighbors4(x,y)){
+              const nt=peekTile(a,b);
+              if(nt) nt.pollution=Math.min(100,nt.pollution+t.level*1.2);
+            }
           }
         }
       }
