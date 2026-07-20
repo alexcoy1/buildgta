@@ -179,6 +179,20 @@ aside.panel{
 }
 .tool .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.03em;text-align:center;max-width:60px;line-height:1.15;font-weight:600}
 .tool .cost{font-size:9px;font-family:var(--mono);color:var(--dim)}
+.draw-mode{
+  display:flex; flex-direction:column; gap:4px; padding:4px 8px 4px 4px; margin-right:4px;
+  border-right:1px solid var(--line2); align-self:stretch; justify-content:center; min-width:108px;
+}
+.draw-mode .dm-label{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:700; padding-left:2px}
+.draw-mode .dm-row{display:flex; gap:4px}
+.draw-mode button{
+  flex:1; background:rgba(255,255,255,.03); border:1px solid var(--line); color:var(--ink2);
+  padding:6px 8px; border-radius:8px; cursor:pointer; font-size:10px; font-weight:700;
+  transition:background .15s, border-color .15s, color .15s;
+}
+.draw-mode button:hover{background:rgba(255,255,255,.06); color:var(--ink); border-color:var(--line2)}
+.draw-mode button.active{background:var(--ttc-dim); color:var(--ink); border-color:rgba(208,18,45,.45)}
+.draw-mode .dm-hint{font-size:9px; color:var(--dim); padding-left:2px; line-height:1.3}
 .parks-panel{display:none;padding:8px 12px 12px;background:rgba(0,0,0,.18);max-height:148px;overflow-y:auto;border-top:1px solid var(--line)}
 .parks-panel.show{display:block}
 .parks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:6px}
@@ -527,7 +541,7 @@ aside.panel{
     <div class="alert-banner" id="alert-banner"><span id="alert-text"></span><button type="button" id="alert-dismiss">Continue</button></div>
     <div class="goals-bar" id="goals-bar"></div>
     <div class="toast-stack" id="toast-stack"></div>
-    <div class="hud-tip" id="tip"><strong>Lay your first road.</strong> Roads → zone R → Power → Water. <b>LMB</b> build · <b>MMB</b> rotate/tilt · <b>RMB drag</b> pan · <b>edge scroll</b>/<b>WASD</b> pan · wheel zoom · <b>Esc</b> cancel · <b>Space</b> pause · <b>1–3</b> speed.</div>
+    <div class="hud-tip" id="tip"><strong>Lay your first road.</strong> Roads → Freeform or Straight · zone R → Power → Water. <b>LMB</b> build · <b>Shift</b> straight · <b>T</b> toggle draw · <b>MMB</b> orbit · <b>RMB drag</b> pan · <b>Esc</b> cancel · <b>Space</b> pause.</div>
     <div class="mobile-cam" id="mobile-cam" aria-label="Camera controls">
       <div class="pad2">
         <button type="button" data-cam="orbitL" title="Orbit left">↺</button>
@@ -903,6 +917,9 @@ let transitRiders=0;
 let fundRoads=1, fundPolice=1, fundFire=1;
 let cityCenter={x:COLS*0.48, y:ROWS*0.72};
 let hoverTile=null, painting=false;
+let roadDrawMode='freeform'; /* freeform | straight — roads/bridges/transit lines */
+let straightAnchor=null;     /* start cell while dragging a straight segment */
+let straightStroke=false;    /* this LMB stroke uses straight mode */
 let worldDirty=true, structuresDirty=true, utilDirty=true;
 let labelEls=[];
 let _labelCamKey='';
@@ -1919,6 +1936,17 @@ const hoverMesh=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.1,0.95), new THREE.M
 hoverMesh.visible=false; scene.add(hoverMesh);
 const ghostMesh=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.45,0.7), new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:0.4,depthWrite:false,emissive:0x404040,emissiveIntensity:0.3}));
 ghostMesh.visible=false; scene.add(ghostMesh);
+const MAX_LINE_GHOST=420;
+const lineGhostGeo=new THREE.BoxGeometry(0.74,0.26,0.74);
+const lineGhostMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.42,depthWrite:false});
+const lineGhostMesh=new THREE.InstancedMesh(lineGhostGeo, lineGhostMat, MAX_LINE_GHOST);
+lineGhostMesh.frustumCulled=false; lineGhostMesh.visible=false; lineGhostMesh.count=0;
+lineGhostMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+scene.add(lineGhostMesh);
+const _lineGhostDummy=new THREE.Object3D();
+const _lineGhostColor=new THREE.Color();
+for(let i=0;i<MAX_LINE_GHOST;i++){ _lineGhostColor.setHex(0xffffff); lineGhostMesh.setColorAt(i,_lineGhostColor); }
+if(lineGhostMesh.instanceColor) lineGhostMesh.instanceColor.needsUpdate=true;
 
 let groundMesh=null;
 let groundWaterMesh=null;
@@ -3002,10 +3030,107 @@ function selectTool(id){
   document.querySelectorAll('.park-btn').forEach((b,i)=>{
     b.classList.toggle('selected', id==='park_'+TORONTO_PARKS[i].id);
   });
+  if(straightAnchor) cancelStraight();
+  syncRoadModeUI();
   syncGuideUI();
+}
+function isRoadPaintTool(id){
+  const def=toolById[id||selectedTool];
+  return !!(def && def.road);
+}
+function setRoadDrawMode(mode){
+  roadDrawMode=(mode==='straight')?'straight':'freeform';
+  if(straightAnchor) cancelStraight();
+  syncRoadModeUI();
+}
+function syncRoadModeUI(){
+  document.querySelectorAll('[data-road-mode]').forEach(b=>{
+    b.classList.toggle('active', b.dataset.roadMode===roadDrawMode);
+  });
+  const hint=document.getElementById('draw-mode-hint');
+  if(hint){
+    hint.textContent=roadDrawMode==='straight'
+      ? 'Click-drag a segment · Esc/RMB cancel'
+      : 'Drag to paint · hold Shift = straight';
+  }
+}
+function lineCells(x0,y0,x1,y1){
+  /* Bresenham grid line — inclusive endpoints */
+  const cells=[];
+  let x=x0|0, y=y0|0;
+  const xEnd=x1|0, yEnd=y1|0;
+  let dx=Math.abs(xEnd-x), dy=Math.abs(yEnd-y);
+  const sx=x<xEnd?1:-1, sy=y<yEnd?1:-1;
+  let err=dx-dy;
+  for(;;){
+    if(inBounds(x,y)) cells.push({x,y});
+    if(x===xEnd&&y===yEnd) break;
+    const e2=err<<1;
+    if(e2>-dy){ err-=dy; x+=sx; }
+    if(e2<dx){ err+=dx; y+=sy; }
+    if(cells.length>MAX_LINE_GHOST) break;
+  }
+  return cells;
+}
+function clearLineGhost(){
+  lineGhostMesh.count=0;
+  lineGhostMesh.visible=false;
+}
+function showLineGhost(cells, def){
+  if(!def||!cells||!cells.length){ clearLineGhost(); return; }
+  const n=Math.min(cells.length, MAX_LINE_GHOST);
+  for(let i=0;i<n;i++){
+    const c=cells[i];
+    const tile=grid[c.x][c.y];
+    let ok=canPlace(def, tile);
+    if(ok && !def.bridge && tile.type!=='empty' && !isRoad(tile)) ok=false;
+    _lineGhostDummy.position.set(c.x+0.5, 0.42, c.y+0.5);
+    _lineGhostDummy.scale.set(1,1,1);
+    _lineGhostDummy.rotation.set(0,0,0);
+    _lineGhostDummy.updateMatrix();
+    lineGhostMesh.setMatrixAt(i, _lineGhostDummy.matrix);
+    _lineGhostColor.set(ok?(def.color||'#ffffff'):'#ff6b57');
+    lineGhostMesh.setColorAt(i, _lineGhostColor);
+  }
+  lineGhostMesh.count=n;
+  lineGhostMesh.instanceMatrix.needsUpdate=true;
+  if(lineGhostMesh.instanceColor) lineGhostMesh.instanceColor.needsUpdate=true;
+  lineGhostMesh.visible=true;
+  ghostMesh.visible=false;
+}
+function cancelStraight(){
+  straightAnchor=null;
+  straightStroke=false;
+  clearLineGhost();
+}
+function finishStraight(endPos){
+  if(!straightAnchor) return;
+  const start=straightAnchor;
+  const end=endPos||start;
+  straightAnchor=null;
+  straightStroke=false;
+  clearLineGhost();
+  const cells=lineCells(start.x, start.y, end.x, end.y);
+  for(let i=0;i<cells.length;i++) applyTool(cells[i]);
 }
 function renderToolbar(){
   toolbar.innerHTML='';
+  if(selectedCat==='roads'||selectedCat==='bridges'||selectedCat==='transit'){
+    const mode=document.createElement('div');
+    mode.className='draw-mode';
+    mode.innerHTML=
+      `<div class="dm-label">Draw</div>`+
+      `<div class="dm-row">`+
+        `<button type="button" data-road-mode="freeform" title="Paint cell-by-cell (default)">Freeform</button>`+
+        `<button type="button" data-road-mode="straight" title="Straight segment (or hold Shift)">Straight</button>`+
+      `</div>`+
+      `<div class="dm-hint" id="draw-mode-hint"></div>`;
+    mode.querySelectorAll('[data-road-mode]').forEach(b=>{
+      b.onclick=()=>setRoadDrawMode(b.dataset.roadMode);
+    });
+    toolbar.appendChild(mode);
+    syncRoadModeUI();
+  }
   const list=TOOLS.filter(t=>t.cat===selectedCat && !(t.parkId));
   list.forEach(t=>{
     const b=document.createElement('button');
@@ -3189,12 +3314,24 @@ canvas.addEventListener('pointerdown',e=>{
     orbit.rotating=false; orbit.panning=false;
     orbit.pointerId=e.pointerId;
     clearEdgeScroll();
-    const p=pickTile(e.clientX,e.clientY); hoverTile=p; applyTool(p);
+    const p=pickTile(e.clientX,e.clientY); hoverTile=p;
+    /* Straight segment: roads/bridges/TTC — mode toggle or hold Shift */
+    straightStroke=isRoadPaintTool() && (roadDrawMode==='straight' || !!camKeys.shift);
+    if(straightStroke){
+      straightAnchor=p;
+      const def=toolById[selectedTool];
+      if(p&&def) showLineGhost([p], def);
+      else clearLineGhost();
+    } else {
+      cancelStraight();
+      applyTool(p);
+    }
     canvas.setPointerCapture(e.pointerId);
   } else if(e.button===1){
     /* C:S — middle mouse rotates + tilts */
     e.preventDefault();
     if(orbit.paintingActive) return;
+    if(straightAnchor) cancelStraight();
     orbit.rotating=true; orbit.panning=false; painting=false; orbit.paintingActive=false;
     orbit.pointerId=e.pointerId;
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
@@ -3203,7 +3340,8 @@ canvas.addEventListener('pointerdown',e=>{
   } else if(e.button===2){
     /* Hold RMB + drag = pan; short click cancels to Inspect */
     e.preventDefault();
-    if(orbit.paintingActive){ painting=false; orbit.paintingActive=false; }
+    if(straightAnchor) cancelStraight();
+    if(orbit.paintingActive){ painting=false; orbit.paintingActive=false; straightStroke=false; }
     orbit.panning=true; orbit.rotating=false; painting=false;
     orbit.pointerId=e.pointerId;
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
@@ -3231,8 +3369,15 @@ canvas.addEventListener('pointermove',e=>{
     return;
   }
   const p=pickTile(e.clientX,e.clientY); hoverTile=p;
-  if(painting&&orbit.paintingActive&&(e.buttons&1)) applyTool(p);
-  else {
+  if(painting&&orbit.paintingActive&&(e.buttons&1)){
+    if(straightStroke && straightAnchor){
+      const def=toolById[selectedTool];
+      const end=p||straightAnchor;
+      showLineGhost(lineCells(straightAnchor.x,straightAnchor.y,end.x,end.y), def);
+    } else {
+      applyTool(p);
+    }
+  } else {
     updateHover(p);
     if((++_inspectThrottle)%4===0) updateInspect(p);
   }
@@ -3241,12 +3386,22 @@ function endPointer(e){
   if(orbit.pointerId!=null && e.pointerId!==orbit.pointerId) return;
   const wasRmb=orbit.panning;
   const drag=orbit.rmbDrag||0;
+  const wasStraight=straightStroke && !!straightAnchor;
+  const endPos=pickTile(e.clientX,e.clientY)||hoverTile;
   painting=false; orbit.paintingActive=false;
   orbit.rotating=false; orbit.panning=false;
   orbit.pointerId=null; orbit.rmbDrag=0;
+  straightStroke=false;
+  /* Commit straight segment before releasePointerCapture (lostpointercapture can race). */
+  if(wasStraight){
+    finishStraight(endPos);
+    try{canvas.releasePointerCapture(e.pointerId)}catch(_){}
+    return;
+  }
   try{canvas.releasePointerCapture(e.pointerId)}catch(_){}
   /* Short RMB click (no drag) → cancel tool / Inspect */
   if(wasRmb && drag<8 && (e.button===2 || (e.buttons&4)===0)){
+    cancelStraight();
     if(selectedTool!=='query'){
       selectTool('query');
       showToast('Inspect mode — hold RMB and drag to pan.', '', 1800);
@@ -3254,9 +3409,15 @@ function endPointer(e){
   }
 }
 canvas.addEventListener('pointerup',endPointer);
-canvas.addEventListener('pointercancel',endPointer);
+canvas.addEventListener('pointercancel',e=>{
+  /* Abort in-progress straight preview — do not place */
+  cancelStraight();
+  endPointer(e);
+});
 canvas.addEventListener('lostpointercapture',()=>{
   painting=false; orbit.paintingActive=false; orbit.rotating=false; orbit.panning=false; orbit.pointerId=null;
+  straightStroke=false;
+  if(straightAnchor) cancelStraight();
 });
 /* Edge scroll only via wrap — avoids double-fire from canvas bubble + binary flicker */
 wrap.addEventListener('pointerenter',()=>{ _ptrOverWrap=true; });
@@ -3324,8 +3485,17 @@ window.addEventListener('keydown',e=>{
     if(e.code==='ArrowUp') camKeys.up=true; if(e.code==='ArrowDown') camKeys.down=true;
     if(e.code==='ArrowLeft') camKeys.left=true; if(e.code==='ArrowRight') camKeys.right=true;
     if(e.code==='Space'){ e.preventDefault(); setSpeed(speed===0?1:0); }
-    if(e.code==='Escape'){ selectTool('query'); }
+    if(e.code==='Escape'){
+      if(straightAnchor){ cancelStraight(); return; }
+      selectTool('query');
+    }
     if(k==='b') selectTool('bulldoze');
+    if(k==='t' && isRoadPaintTool()){
+      setRoadDrawMode(roadDrawMode==='straight'?'freeform':'straight');
+      showToast(roadDrawMode==='straight'
+        ? 'Straight roads — click-drag a segment (Shift also works).'
+        : 'Freeform roads — drag to paint cell-by-cell.', '', 2000);
+    }
   }
   /* C:S zoning hotkeys + a few extras */
   if(!typing){
@@ -3361,17 +3531,20 @@ window.addEventListener('blur',()=>{
 });
 
 function updateHover(pos){
-  if(!pos){hoverMesh.visible=false;ghostMesh.visible=false;return}
+  if(straightAnchor) return; /* line ghost owns preview while placing a segment */
+  if(!pos){hoverMesh.visible=false;ghostMesh.visible=false;clearLineGhost();return}
   hoverMesh.visible=true; hoverMesh.position.set(pos.x+0.5,0.22,pos.y+0.5);
   const def=toolById[selectedTool];
   if(def&&selectedTool!=='query'&&selectedTool!=='bulldoze'){
     const tile=grid[pos.x][pos.y];
     const ok=canPlace(def, tile);
+    /* Idle straight mode: single-cell ghost; freeform same */
+    clearLineGhost();
     ghostMesh.visible=true;
     ghostMesh.material.color.set(ok?(def.color||'#fff'):'#ff6b57');
     ghostMesh.material.opacity=ok?0.4:0.55;
     ghostMesh.position.set(pos.x+0.5,0.5,pos.y+0.5);
-  } else ghostMesh.visible=false;
+  } else { ghostMesh.visible=false; clearLineGhost(); }
 }
 
 /* ---- Simulation (lean — one pass where possible) ---- */
@@ -3921,6 +4094,14 @@ function updateUI(pr,wr,waster){
   let missing='';
   if(tutorialActive && tutorialStep<TUTORIAL_SEQ.length){
     tip.className='hud-tip'; tip.innerHTML=TUTORIAL_SEQ[tutorialStep].tip; 
+  } else if(isRoadPaintTool() && (roadDrawMode==='straight' || camKeys.shift || straightAnchor)){
+    tip.className='hud-tip';
+    tip.innerHTML=straightAnchor
+      ? '<strong>Straight road:</strong> drag to the end point, release to pave. <b>Esc</b>/<b>RMB</b> cancel.'
+      : '<strong>Straight mode</strong> — click-drag a clean segment. Toggle <b>Freeform</b> or press <b>T</b>. Hold <b>Shift</b> anytime.';
+  } else if(isRoadPaintTool() && roadDrawMode==='freeform'){
+    tip.className='hud-tip';
+    tip.innerHTML='<strong>Freeform road</strong> — drag to paint cell-by-cell. Switch to <b>Straight</b> (or hold <b>Shift</b> / press <b>T</b>) for long highways.';
   } else if(hoverTile&&isZone(grid[hoverTile.x][hoverTile.y])){
     const t=grid[hoverTile.x][hoverTile.y];
     if(!hasRoadAccess(hoverTile.x,hoverTile.y)) missing='This zone needs a <strong>road</strong> beside it.';
