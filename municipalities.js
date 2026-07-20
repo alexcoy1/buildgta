@@ -1,0 +1,38 @@
+/* Exact WGS84 municipal seats / representative points for GTA bbox.
+   Sources: Statistics Canada CSD representative-point style coords (public),
+   municipal halls / OSM Nominatim where StatCan points match open listings.
+   Logos: typographic nameplates + generated shields (no non-free trademark art). */
+window.GTA_MUNICIPALITIES = [
+  { name: 'Hamilton', lon: -79.8711, lat: 43.2650, tier: 'city', color: '#6b2d2d' },
+  { name: 'Burlington', lon: -79.7990, lat: 43.3255, tier: 'city', color: '#1a4a6b' },
+  { name: 'Oakville', lon: -79.6877, lat: 43.4675, tier: 'town', color: '#1e5a40' },
+  { name: 'Milton', lon: -79.8832, lat: 43.5183, tier: 'town', color: '#3a4a6b' },
+  { name: 'Halton Hills', lon: -79.9280, lat: 43.6460, tier: 'town', color: '#2a5a48' },
+  { name: 'Mississauga', lon: -79.6441, lat: 43.5890, tier: 'city', color: '#7a2a40' },
+  { name: 'Brampton', lon: -79.7624, lat: 43.7315, tier: 'city', color: '#8a3030' },
+  { name: 'Caledon', lon: -79.8740, lat: 43.8660, tier: 'town', color: '#3a6a38' },
+  { name: 'Toronto', lon: -79.3832, lat: 43.6532, tier: 'city', color: '#d0122d' },
+  { name: 'Etobicoke', lon: -79.5132, lat: 43.6205, tier: 'district', color: '#4a6080' },
+  { name: 'North York', lon: -79.4126, lat: 43.7615, tier: 'district', color: '#4a6080' },
+  { name: 'Scarborough', lon: -79.2318, lat: 43.7764, tier: 'district', color: '#4a6080' },
+  { name: 'York', lon: -79.4790, lat: 43.6890, tier: 'district', color: '#4a6080' },
+  { name: 'East York', lon: -79.3280, lat: 43.6910, tier: 'district', color: '#4a6080' },
+  { name: 'Vaughan', lon: -79.5083, lat: 43.8563, tier: 'city', color: '#1a5080' },
+  { name: 'Richmond Hill', lon: -79.4403, lat: 43.8828, tier: 'city', color: '#2a4a70' },
+  { name: 'Markham', lon: -79.3400, lat: 43.8561, tier: 'city', color: '#206050' },
+  { name: 'King', lon: -79.5280, lat: 43.9600, tier: 'twp', color: '#3a5a40' },
+  { name: 'Aurora', lon: -79.4510, lat: 44.0065, tier: 'town', color: '#2a5570' },
+  { name: 'Newmarket', lon: -79.4619, lat: 44.0592, tier: 'town', color: '#1a4a60' },
+  { name: 'East Gwillimbury', lon: -79.4370, lat: 44.0950, tier: 'town', color: '#355848' },
+  { name: 'Georgina', lon: -79.3700, lat: 44.0900, tier: 'town', color: '#2a5868' },
+  { name: 'Whitchurch-Stouffville', lon: -79.2500, lat: 43.9700, tier: 'town', color: '#3a5840' },
+  { name: 'Pickering', lon: -79.0880, lat: 43.8384, tier: 'city', color: '#1a6070' },
+  { name: 'Ajax', lon: -79.0200, lat: 43.8509, tier: 'town', color: '#204a70' },
+  { name: 'Whitby', lon: -78.9420, lat: 43.8975, tier: 'town', color: '#1e4870' },
+  { name: 'Oshawa', lon: -78.8640, lat: 43.8971, tier: 'city', color: '#6a2030' },
+  { name: 'Clarington', lon: -78.8100, lat: 43.9350, tier: 'muni', color: '#2a5060' },
+  { name: 'Uxbridge', lon: -79.1200, lat: 44.0950, tier: 'twp', color: '#3a6040' },
+  { name: 'Scugog', lon: -78.9500, lat: 44.0950, tier: 'twp', color: '#355850' },
+  { name: 'Brock', lon: -79.0800, lat: 44.0950, tier: 'twp', color: '#3a5550' },
+  { name: 'Stoney Creek', lon: -79.7200, lat: 43.2700, tier: 'district', color: '#5a3038' }
+];

@@ -84,10 +84,26 @@ button.ctl.ghost:hover{border-color:var(--line2); color:var(--ink)}
 .label-layer{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
 .map-label{
   position:absolute;transform:translate(-50%,-100%);
-  font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.12em;
-  text-transform:uppercase; color:rgba(255,255,255,.5);
+  font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; color:rgba(255,255,255,.72);
   text-shadow:0 1px 4px rgba(0,0,0,.85); white-space:nowrap; pointer-events:none;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
 }
+.map-label .muni-shield{
+  width:22px; height:26px; border-radius:3px 3px 10px 10px;
+  border:1px solid rgba(255,255,255,.35); box-shadow:0 2px 8px rgba(0,0,0,.45);
+  display:flex; align-items:center; justify-content:center;
+  font-size:8px; font-weight:800; letter-spacing:0; color:#fff;
+}
+.map-label .muni-name{
+  padding:2px 7px; border-radius:4px;
+  background:rgba(8,16,22,.78); border:1px solid rgba(255,255,255,.12);
+  font-size:9px; letter-spacing:.1em;
+}
+.map-label.tier-city .muni-shield{ width:26px; height:30px; font-size:9px }
+.map-label.tier-city .muni-name{ font-size:10px; font-weight:800 }
+.map-label.far .muni-name{ display:none }
+.map-label.far .muni-shield{ width:14px; height:16px; font-size:6px; border-radius:2px 2px 6px 6px }
 .hud-tip{
   position:absolute; left:14px; bottom:14px; z-index:3;
   background:rgba(10,20,28,.82); border:1px solid var(--line2);
@@ -435,15 +451,15 @@ aside.panel{
       </svg>
       <div class="eyebrow">Greater Toronto · City Builder</div>
       <h1>Metro Builder<br><span>Toronto</span></h1>
-      <p>Found a city from the 401 to the harbour. Grow neighbourhoods, power the grid, and raise the skyline.</p>
+      <p>Found a city from Hamilton to Oshawa. Grow neighbourhoods, power the grid, and raise the skyline.</p>
     </div>
     <div class="lobby-panel">
       <h2>Mode</h2>
       <div class="mode-grid" id="mode-grid">
-        <button type="button" class="mode-card active" data-mode="classic"><strong>Classic</strong><span>401 ready · $55k · standard growth</span></button>
+        <button type="button" class="mode-card active" data-mode="classic"><strong>Classic</strong><span>$55k · standard growth</span></button>
         <button type="button" class="mode-card" data-mode="sandbox"><strong>Sandbox</strong><span>$500k · relaxed demand</span></button>
         <button type="button" class="mode-card" data-mode="challenge"><strong>Challenge</strong><span>$25k · tighter budget</span></button>
-        <button type="button" class="mode-card" data-mode="empty"><strong>Empty Shore</strong><span>No 401 · blank land</span></button>
+        <button type="button" class="mode-card" data-mode="empty"><strong>Empty Shore</strong><span>Blank land · same map</span></button>
       </div>
       <h2>Setup</h2>
       <div class="opt-row"><span>Difficulty</span>
@@ -507,7 +523,7 @@ aside.panel{
     <div class="alert-banner" id="alert-banner"><span id="alert-text"></span><button type="button" id="alert-dismiss">Continue</button></div>
     <div class="goals-bar" id="goals-bar"></div>
     <div class="toast-stack" id="toast-stack"></div>
-    <div class="hud-tip" id="tip"><strong>Build from the 401.</strong> Roads → zone R → Power → Water. <b>LMB</b> build · <b>MMB</b> rotate/tilt · <b>RMB drag</b> pan · <b>edge scroll</b>/<b>WASD</b> pan · wheel zoom · <b>Esc</b> cancel · <b>Space</b> pause · <b>1–3</b> speed.</div>
+    <div class="hud-tip" id="tip"><strong>Lay your first road.</strong> Roads → zone R → Power → Water. <b>LMB</b> build · <b>MMB</b> rotate/tilt · <b>RMB drag</b> pan · <b>edge scroll</b>/<b>WASD</b> pan · wheel zoom · <b>Esc</b> cancel · <b>Space</b> pause · <b>1–3</b> speed.</div>
     <div class="mobile-cam" id="mobile-cam" aria-label="Camera controls">
       <div class="pad2">
         <button type="button" data-cam="orbitL" title="Orbit left">↺</button>
@@ -526,7 +542,7 @@ aside.panel{
       <div class="guide-card">
         <strong>Quick start</strong>
         <ol id="guide-steps">
-          <li data-step="0">Paint a <strong>Street</strong> south from the <strong>401</strong></li>
+          <li data-step="0">Paint a <strong>Street</strong> on open land</li>
           <li data-step="1">Zone <strong>R Low</strong> beside that road</li>
           <li data-step="2">Place a <strong>Wind Turbine</strong> on the road network</li>
           <li data-step="3">Place a <strong>Water Tower</strong>, then hit <strong>▶▶</strong></li>
@@ -570,6 +586,7 @@ aside.panel{
 </div>
 
 <script src="gta-geo.js"></script>
+<script src="municipalities.js"></script>
 <script>
 (function(){
 'use strict';
@@ -618,9 +635,9 @@ ensureThree().then(()=>{
 }).catch(err=>showBootError(err.message||String(err)));
 
 const MODE_PRESETS={
-  classic:{ money:55000, with401:true, growth:1, label:'Classic' },
-  sandbox:{ money:500000, with401:true, growth:1.35, label:'Sandbox' },
-  challenge:{ money:25000, with401:true, growth:0.7, label:'Challenge' },
+  classic:{ money:55000, with401:false, growth:1, label:'Classic' },
+  sandbox:{ money:500000, with401:false, growth:1.35, label:'Sandbox' },
+  challenge:{ money:25000, with401:false, growth:0.7, label:'Challenge' },
   empty:{ money:60000, with401:false, growth:1, label:'Empty Shore' }
 };
 const DIFF_PRESETS={
@@ -631,7 +648,7 @@ const DIFF_PRESETS={
 
 let lobbyMode='classic';
 let engineReady=false;
-let gameSettings={ mode:'classic', money:55000, with401:true, growthMult:1, events:true, season:0, guide:true, taxFeel:1, eventChance:1 };
+let gameSettings={ mode:'classic', money:55000, with401:false, growthMult:1, events:true, season:0, guide:true, taxFeel:1, eventChance:1 };
 
 function hasSave(){
   try{ return !!localStorage.getItem('metroTorontoCS'); }catch(_){ return false; }
@@ -906,7 +923,7 @@ const hist={pop:[],jobs:[],money:[],traffic:[],happiness:[]};
 let burningTiles=0, floodedTiles=0;
 const TRANSIT_TYPES=new Set(['transit','transitbridge','metro','busdepot','ferry','harbor','trainpass','traincargo','monorail']);
 const TUTORIAL_SEQ=[
-  {cat:'roads', tool:'road', tip:'Paint a <strong>Street</strong> south from the 401.'},
+  {cat:'roads', tool:'road', tip:'Paint a <strong>Street</strong> on open land.'},
   {cat:'zones', tool:'rzone', tip:'Zone <strong>R Low</strong> beside that road.'},
   {cat:'power', tool:'wind', tip:'Place a <strong>Wind Turbine</strong> on the road network.'},
   {cat:'water', tool:'watertower', tip:'Place a <strong>Water Tower</strong>, then hit <strong>▶▶</strong>.'}
@@ -1206,7 +1223,23 @@ function log(msg,ev){const d=document.createElement('div');if(ev)d.className='ev
 
 function rebuildLabelDom(){
   const layer=document.getElementById('labels'); layer.innerHTML='';
-  labelEls=landmarks.map(lm=>{const el=document.createElement('div');el.className='map-label';el.textContent=lm.name;el._lm=lm;layer.appendChild(el);return el});
+  labelEls=landmarks.map(lm=>{
+    const el=document.createElement('div');
+    el.className='map-label tier-'+(lm.tier||'town');
+    el._lm=lm;
+    const shield=document.createElement('div');
+    shield.className='muni-shield';
+    shield.style.background=lm.color||'#3a5060';
+    const initials=(lm.name||'?').split(/\s+/).map(w=>w[0]).join('').slice(0,3);
+    shield.textContent=initials;
+    const name=document.createElement('div');
+    name.className='muni-name';
+    name.textContent=lm.name;
+    el.appendChild(shield);
+    el.appendChild(name);
+    layer.appendChild(el);
+    return el;
+  });
 }
 
 /* ---- Terrain: exact-scale Hamilton→Oshawa from open.toronto.ca + OSM ----
@@ -1238,17 +1271,38 @@ function geoLabel(name, fallbackX, fallbackY){
   if(hit) return [hit.x|0, hit.y|0, name];
   return [fallbackX, fallbackY, name];
 }
+function lonLatToCell(lon, lat){
+  const b=GTA.bbox||{west:-79.95,east:-78.8,south:43.26,north:44.1};
+  const x=Math.floor(((lon-b.west)/(b.east-b.west))*COLS);
+  const y=Math.floor(((b.north-lat)/(b.north-b.south))*ROWS);
+  return [clamp(x,0,COLS-1), clamp(y,0,ROWS-1)];
+}
+function isLandMask(x,y){
+  if(!inBounds(x,y)) return false;
+  const c=maskCode(x,y);
+  return c===0; /* open buildable land only */
+}
+function findLandNear(sx,sy,maxR){
+  const R=maxR==null?80:maxR;
+  if(isLandMask(sx,sy)) return [sx,sy];
+  for(let r=1;r<=R;r++){
+    for(let dx=-r;dx<=r;dx++){
+      const a=sx+dx, b1=sy-r, b2=sy+r;
+      if(isLandMask(a,b1)) return [a,b1];
+      if(isLandMask(a,b2)) return [a,b2];
+    }
+    for(let dy=-r+1;dy<=r-1;dy++){
+      const a1=sx-r, a2=sx+r, b=sy+dy;
+      if(isLandMask(a1,b)) return [a1,b];
+      if(isLandMask(a2,b)) return [a2,b];
+    }
+  }
+  return [clamp(sx,2,COLS-3), clamp(sy,2,ROWS-3)];
+}
 function computeElev(x,y,code,shore){
-  if(code===4) return -2;
-  if(code===1) return -0.55;
-  if(code===2) return -0.42;
-  if(code===3) return 0.06;
-  const distShore=Math.max(0, shore-y);
-  let elev=0.04+Math.min(0.38, distShore*0.012*(CELL_M/96));
-  if(x<COLS*0.14 && y>ROWS*0.55) elev+=0.10+noise2(x,y)*0.04;
-  if(x>COLS*0.58 && x<COLS*0.72 && distShore<=Math.max(2, Math.round(4*SCALE/8)) && distShore>=0) elev=Math.max(elev, 0.30);
-  elev+=(noise2(x*0.17,y*0.19)-0.5)*0.05;
-  return elev;
+  /* Flat playable grid — geo features are colour-coded, not extruded */
+  if(code===1) return -0.03; /* water: tiny recess only */
+  return 0;
 }
 function computeLandValue(x,y,code,dtx,dty){
   if(code===1) return 0;
@@ -1350,32 +1404,8 @@ function makeTerrain(){
     }
   }
 
-  /* Highway 401 — real OSM corridor cells when baked; else lat spine fallback */
-  if(gameSettings.with401!==false){
-    const hwyCells=GTA.hwy401;
-    if(hwyCells && hwyCells.length){
-      for(let i=0;i<hwyCells.length;i++){
-        const id=hwyCells[i]|0;
-        const x=(id/ROWS)|0, y=id%ROWS;
-        if(!inBounds(x,y)) continue;
-        const cell=ensureTile(x,y);
-        if(cell.terrain==='ravine'||cell.terrain==='water') cell.type='hwybridge';
-        else if(isBuildableTerrain(cell)) cell.type='highway';
-        cell.level=0;
-      }
-    } else {
-      const hwy=geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.35));
-      const y401=clamp(hwy[1]|0, 2, ROWS-3);
-      for(let x=0;x<COLS;x++){
-        const cell=ensureTile(x,y401);
-        if(cell.terrain==='ravine'||cell.terrain==='water') cell.type='hwybridge';
-        else if(isBuildableTerrain(cell)) cell.type='highway';
-        cell.level=0;
-      }
-    }
-  }
-  const hwyLbl=geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.35));
-  placeLabels(hwyLbl[1]|0);
+  /* No pre-placed Highway 401 — blank map, player lays roads */
+  placeLabels();
   rebuildActiveTiles();
   worldDirty=true; structuresDirty=true;
 }
@@ -1387,36 +1417,24 @@ function decodeGtaMask(){
   return out;
 }
 
-function placeLabels(y401){
-  const fromGeo=(GTA.labels||[]).map(l=>({x:l.x|0,y:l.y|0,name:l.name}));
-  if(fromGeo.length){
-    landmarks=fromGeo.filter(l=>inBounds(l.x,l.y));
-    if(gameSettings.with401===false) landmarks=landmarks.filter(l=>l.name!=='Highway 401');
+function placeLabels(){
+  const skip=l=>l.name!=='Highway 401' && l.name!=='Lake Ontario' && l.name!=='Toronto Islands';
+  const bb=GTA.bbox||{west:-79.95,east:-78.8,south:43.26,north:44.1};
+  const inBbox=(lon,lat)=>lon>=bb.west&&lon<=bb.east&&lat>=bb.south&&lat<=bb.north;
+  const fromMuni=(window.GTA_MUNICIPALITIES||[]).filter(m=>inBbox(m.lon,m.lat)).map(m=>{
+    const [x,y]=lonLatToCell(m.lon, m.lat);
+    return {x,y,name:m.name,lon:m.lon,lat:m.lat,tier:m.tier||'town',color:m.color||'#3a5060'};
+  });
+  if(fromMuni.length){
+    landmarks=fromMuni.filter(l=>inBounds(l.x,l.y)).filter(skip);
+    /* De-dupe names keeping first (higher priority in list) */
+    const seen=new Set();
+    landmarks=landmarks.filter(l=>{ if(seen.has(l.name)) return false; seen.add(l.name); return true; });
     rebuildLabelDom();
     return;
   }
-  const L=(name,fx,fy)=>geoLabel(name, fx, fy);
-  landmarks=[
-    gameSettings.with401!==false ? [Math.floor(COLS*0.48), y401, 'Highway 401'] : null,
-    L('Hamilton', Math.floor(COLS*0.06), Math.floor(ROWS*0.95)),
-    L('Burlington', Math.floor(COLS*0.12), Math.floor(ROWS*0.88)),
-    L('Oakville', Math.floor(COLS*0.22), Math.floor(ROWS*0.70)),
-    L('Mississauga', Math.floor(COLS*0.26), Math.floor(ROWS*0.50)),
-    L('Brampton', Math.floor(COLS*0.20), Math.floor(ROWS*0.42)),
-    L('Etobicoke', Math.floor(COLS*0.35), Math.floor(ROWS*0.45)),
-    L('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.42)),
-    L('Toronto Islands', Math.floor(COLS*0.49), Math.floor(ROWS*0.46)),
-    L('North York', Math.floor(COLS*0.47), Math.floor(ROWS*0.26)),
-    L('Vaughan', Math.floor(COLS*0.40), Math.floor(ROWS*0.18)),
-    L('Richmond Hill', Math.floor(COLS*0.44), Math.floor(ROWS*0.12)),
-    L('Markham', Math.floor(COLS*0.52), Math.floor(ROWS*0.14)),
-    L('Scarborough', Math.floor(COLS*0.62), Math.floor(ROWS*0.30)),
-    L('Pickering', Math.floor(COLS*0.74), Math.floor(ROWS*0.15)),
-    L('Ajax', Math.floor(COLS*0.80), Math.floor(ROWS*0.14)),
-    L('Whitby', Math.floor(COLS*0.87), Math.floor(ROWS*0.12)),
-    L('Oshawa', Math.floor(COLS*0.94), Math.floor(ROWS*0.08)),
-    L('Lake Ontario', Math.floor(COLS*0.65), Math.floor(ROWS*0.70)),
-  ].filter(Boolean).filter(([x,y])=>inBounds(x,y)).map(([x,y,name])=>({x,y,name}));
+  const fromGeo=(GTA.labels||[]).map(l=>({x:l.x|0,y:l.y|0,name:l.name,lon:l.lon,lat:l.lat,tier:'town',color:'#3a5060'}));
+  landmarks=fromGeo.filter(l=>inBounds(l.x,l.y)).filter(skip);
   rebuildLabelDom();
 }
 
@@ -1476,20 +1494,23 @@ renderer.toneMappingExposure=1.15;
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x3a6a7a);
-scene.fog=new THREE.FogExp2(0x4a7a88, LARGE_MAP?0.00035:0.0011);
-const camera=new THREE.PerspectiveCamera(42,1,0.1, Math.max(500, Math.hypot(COLS,ROWS)*1.4));
-/* Start overlooking downtown / 401 corridor */
-const _dtCam=geoLabel('Downtown Toronto', Math.floor(COLS*0.49), Math.floor(ROWS*0.55));
-const y401cam=clamp((geoLabel('Highway 401', Math.floor(COLS*0.47), Math.floor(ROWS*0.35))[1])|0, 2, ROWS-3);
-const _camH=LARGE_MAP?Math.min(120, 28+SCALE*2.2):48;
-const _camBack=LARGE_MAP?Math.min(80, 10+SCALE*1.1):14;
-camera.position.set(_dtCam[0], _camH, y401cam - _camBack);
+const FOG_DENSITY=LARGE_MAP?0.00009:0.0011;
+scene.fog=new THREE.FogExp2(0x4a7a88, FOG_DENSITY);
+const camera=new THREE.PerspectiveCamera(42,1,0.1, Math.max(500, Math.hypot(COLS,ROWS)*1.6));
+/* Start overlooking buildable land near Toronto City Hall */
+const _torLonLat=[-79.3832, 43.6532];
+const _torCell=lonLatToCell(_torLonLat[0], _torLonLat[1]);
+const _spawn=findLandNear(_torCell[0], _torCell[1], 120);
+cityCenter={x:_spawn[0], y:_spawn[1]};
+const _camH=LARGE_MAP?Math.min(90, 24+SCALE*2):48;
+const _camBack=LARGE_MAP?Math.min(48, 8+SCALE*0.9):14;
+camera.position.set(_spawn[0], _camH, _spawn[1] - _camBack);
 
 const ORBIT_DEG=Math.PI/180;
-const _orbitLook=_dtCam[1];
+const _orbitLook=_spawn[1];
 const orbit={
-  target:new THREE.Vector3(_dtCam[0], 0, _orbitLook),
-  targetGoal:new THREE.Vector3(_dtCam[0], 0, _orbitLook),
+  target:new THREE.Vector3(_spawn[0], 0, _orbitLook),
+  targetGoal:new THREE.Vector3(_spawn[0], 0, _orbitLook),
   spherical:new THREE.Spherical(),
   goal:new THREE.Spherical(),
   rotating:false, panning:false, paintingActive:false,
@@ -1498,13 +1519,14 @@ const orbit={
   rmbDrag:0,
   rotateSpeed:0.0052,
   tiltSpeed:0.0042,
-  panFactor:LARGE_MAP?0.0022:0.0014,
-  keyPanFactor:LARGE_MAP?0.85:0.52,
-  edgePanFactor:LARGE_MAP?0.7:0.42,
+  panFactor:LARGE_MAP?0.0028:0.0014,
+  keyPanFactor:LARGE_MAP?1.15:0.52,
+  edgePanFactor:LARGE_MAP?0.95:0.42,
   dampOrbit:15,
   dampTarget:18,
   minR:LARGE_MAP?6:10,
-  maxR:LARGE_MAP?Math.min(220, 40+SCALE*6):95,
+  /* Zoom out far enough to read Hamilton→Oshawa extent */
+  maxR:LARGE_MAP?Math.min(560, Math.max(220, Math.hypot(COLS,ROWS)*0.4)):95,
   minPhi:18*ORBIT_DEG,
   maxPhi:82*ORBIT_DEG
 };
@@ -1559,7 +1581,9 @@ function stepCamera(dt){
   orbit.spherical.radius+=(orbit.goal.radius-orbit.spherical.radius)*sk;
   orbit.target.lerp(orbit.targetGoal, tk);
   applyOrbitToCamera();
-  if(LARGE_MAP) refreshGroundInstances();
+  if(LARGE_MAP){
+    try{ refreshGroundInstances(); }catch(err){ console.warn('ground refresh', err); }
+  }
 }
 
 function getPanAxes(){
@@ -1828,12 +1852,13 @@ harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(_isl[0],-0.72,_isl
 
 function applySeasonLook(){
   const s=seasonIdx;
+  const fogBase=FOG_DENSITY;
   if(s===0){ /* Spring */
     ambient.color.setHex(0xc0d4e0); ambient.intensity=0.58;
     sun.color.setHex(0xfff4e4); sun.intensity=1.4;
     hemi.color.setHex(0xb0d0e0); hemi.groundColor.setHex(0x4a6540); hemi.intensity=0.45;
     rim.color.setHex(0x90b0c0); rim.intensity=0.28;
-    scene.fog.color.setHex(0x4a7a88); scene.fog.density=0.0012;
+    scene.fog.color.setHex(0x4a7a88); scene.fog.density=fogBase*(LARGE_MAP?1:1.1);
     scene.background.setHex(0x3a6a7a);
     renderer.setClearColor(0x3a6a7a);
   } else if(s===1){ /* Summer */
@@ -1841,7 +1866,7 @@ function applySeasonLook(){
     sun.color.setHex(0xfff8ec); sun.intensity=1.55;
     hemi.color.setHex(0xc0dce8); hemi.groundColor.setHex(0x5a7a40); hemi.intensity=0.5;
     rim.color.setHex(0xa0c0cc); rim.intensity=0.32;
-    scene.fog.color.setHex(0x4a8090); scene.fog.density=0.0009;
+    scene.fog.color.setHex(0x4a8090); scene.fog.density=fogBase*(LARGE_MAP?0.95:0.82);
     scene.background.setHex(0x3e7080);
     renderer.setClearColor(0x3e7080);
   } else if(s===2){ /* Fall */
@@ -1849,7 +1874,7 @@ function applySeasonLook(){
     sun.color.setHex(0xffd090); sun.intensity=1.35;
     hemi.color.setHex(0xd8b080); hemi.groundColor.setHex(0x5a4830); hemi.intensity=0.42;
     rim.color.setHex(0xb09878); rim.intensity=0.26;
-    scene.fog.color.setHex(0x5a5848); scene.fog.density=0.0013;
+    scene.fog.color.setHex(0x5a5848); scene.fog.density=fogBase*(LARGE_MAP?1.05:1.18);
     scene.background.setHex(0x3a3830);
     renderer.setClearColor(0x3a3830);
   } else { /* Winter */
@@ -1857,7 +1882,7 @@ function applySeasonLook(){
     sun.color.setHex(0xf0f4ff); sun.intensity=1.4;
     hemi.color.setHex(0xd8e4f0); hemi.groundColor.setHex(0x789098); hemi.intensity=0.48;
     rim.color.setHex(0xa8c0d0); rim.intensity=0.3;
-    scene.fog.color.setHex(0x4a6070); scene.fog.density=0.001;
+    scene.fog.color.setHex(0x4a6070); scene.fog.density=fogBase*(LARGE_MAP?1:0.91);
     scene.background.setHex(0x345060);
     renderer.setClearColor(0x345060);
   }
@@ -2271,53 +2296,88 @@ function ravineWaterColor(x,y){
   return n>0.55?0x1a6a80:0x1e7890;
 }
 function roadDeckElev(x,y,t){
-  if(!isRoad(t)) return 0.12;
-  const def=toolById[t.type];
-  const isBr=!!(def&&def.bridge);
-  const overWater=t.terrain==='ravine'||t.terrain==='water';
-  /* Span over water/ravine */
-  if(isBr&&overWater) return 0.72;
-  /* Bridge approach on land next to water */
-  if(isBr&&(nearTerrain(x,y,'ravine',1)||nearTerrain(x,y,'water',1))) return 0.46;
-  /* Smooth ramp: any road near an elevated bridge span */
-  let elev=0.14;
-  for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
-    if(!dx&&!dy) continue;
-    const nx=x+dx, ny=y+dy;
-    if(!inBounds(nx,ny)) continue;
-    const nt=grid[nx][ny];
-    if(!isRoad(nt)) continue;
-    const nd=toolById[nt.type];
-    if(!(nd&&nd.bridge)) continue;
-    if(nt.terrain!=='ravine'&&nt.terrain!=='water') continue;
-    const dist=Math.abs(dx)+Math.abs(dy);
-    if(dist===1) elev=Math.max(elev, 0.46);
-    else if(dist===2) elev=Math.max(elev, 0.28);
-  }
-  if(isBr) elev=Math.max(elev, 0.14);
-  return elev;
+  /* Flat network — bridges sit on the same deck as roads so joins never mismatch */
+  return 0.12;
 }
 
-const CHUNK=48;
+/* Near-camera 3D tiles stream in a window; full extent always drawn via LOD plane */
+const CHUNK=56;
+const STREAM_MAX_R=72; /* must match pool — keep rebuilds cheap so paint stays responsive */
+const STREAM_SIDE=STREAM_MAX_R*2+1;
 let groundChunkKey='';
 let groundPool=null;
+let mapLodMesh=null;
+let _groundRefreshAt=0;
+
+function buildFullMapLod(){
+  if(mapLodMesh||!terrainMask) return;
+  try{
+    const maxW=512;
+    const tw=Math.min(COLS, maxW);
+    const th=Math.max(1, Math.round(ROWS*(tw/COLS)));
+    const c=document.createElement('canvas');
+    c.width=tw; c.height=th;
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    const img=ctx.createImageData(tw, th);
+    const d=img.data;
+    const dtx=cityCenter.x, dty=cityCenter.y;
+    for(let py=0;py<th;py++){
+      const y=Math.min(ROWS-1, Math.floor(py*(ROWS/th)));
+      for(let px=0;px<tw;px++){
+        const x=Math.min(COLS-1, Math.floor(px*(COLS/tw)));
+        const code=maskCode(x,y);
+        const i=(py*tw+px)*4;
+        let r,g,b;
+        if(code===4){ r=38; g=86; b=100; }
+        else if(code===1){ r=26; g=112; b=132; }
+        else if(code===2){ r=58; g=110; b=72; }
+        else if(code===3){ r=68; g=148; b=78; }
+        else {
+          const lv=computeLandValue(x,y,code,dtx,dty);
+          if(lv>62){ r=118+lv*0.25; g=116+lv*0.2; b=110+lv*0.15; }
+          else { r=92+lv*0.35; g=116+lv*0.28; b=86+lv*0.12; }
+        }
+        d[i]=clamp(r|0,0,255); d[i+1]=clamp(g|0,0,255); d[i+2]=clamp(b|0,0,255); d[i+3]=255;
+      }
+    }
+    ctx.putImageData(img,0,0);
+    const tex=new THREE.CanvasTexture(c);
+    tex.magFilter=THREE.LinearFilter;
+    tex.minFilter=THREE.LinearFilter;
+    tex.generateMipmaps=true;
+    tex.needsUpdate=true;
+    const mat=new THREE.MeshLambertMaterial({
+      map:tex, emissive:0x0c1814, emissiveIntensity:0.1,
+      depthWrite:true
+    });
+    mapLodMesh=new THREE.Mesh(new THREE.PlaneGeometry(COLS, ROWS), mat);
+    mapLodMesh.rotation.x=-Math.PI/2;
+    mapLodMesh.position.set(COLS/2, -0.02, ROWS/2);
+    mapLodMesh.frustumCulled=false;
+    mapLodMesh.renderOrder=-2;
+    scene.add(mapLodMesh);
+  }catch(err){
+    console.warn('Full-map LOD skipped', err);
+  }
+}
 
 function rebuildGround(){
+  if(LARGE_MAP) buildFullMapLod();
   if(!groundMesh){
     const landMat=new THREE.MeshLambertMaterial({color:0x6e8f5a, emissive:0x1a2814, emissiveIntensity:0.1});
     const shoreMat=new THREE.MeshLambertMaterial({color:0x8a9078, emissive:0x202418, emissiveIntensity:0.08});
     const urbanMat=new THREE.MeshLambertMaterial({color:0x7a7e78, emissive:0x181818, emissiveIntensity:0.08});
     const islandMat=new THREE.MeshLambertMaterial({color:0x4a8a48, emissive:0x142814, emissiveIntensity:0.12});
-    const waterTileMat=new THREE.MeshPhongMaterial({
-      color:0x2a8fa3, emissive:0x0a3040, emissiveIntensity:0.18,
-      shininess:40, specular:0x66aacc, transparent:true, opacity:0.92
+    const waterTileMat=new THREE.MeshLambertMaterial({
+      color:0x2a8fa3, emissive:0x0a3040, emissiveIntensity:0.16
     });
-    const ravMat=new THREE.MeshPhongMaterial({
-      color:0x2490a0, emissive:0x0a2838, emissiveIntensity:0.16,
-      shininess:36, specular:0x55a0b0, transparent:true, opacity:0.9
+    /* Protected ravine corridor — flat colour mark, not extruded river gorge */
+    const ravMat=new THREE.MeshLambertMaterial({
+      color:0x3a6a48, emissive:0x102818, emissiveIntensity:0.12
     });
     const tileGeo=new THREE.BoxGeometry(0.98,1,0.98);
-    const cap=LARGE_MAP ? (CHUNK*2+1)*(CHUNK*2+1) : COLS*ROWS;
+    /* Pool sized exactly for STREAM_MAX_R window — never silently drop tiles */
+    const cap=LARGE_MAP ? STREAM_SIDE*STREAM_SIDE : COLS*ROWS;
     groundMesh=new THREE.InstancedMesh(tileGeo, landMat, cap);
     groundShoreMesh=new THREE.InstancedMesh(tileGeo, shoreMat, cap);
     groundUrbanMesh=new THREE.InstancedMesh(tileGeo, urbanMat, cap);
@@ -2325,7 +2385,9 @@ function rebuildGround(){
     groundWaterMesh=new THREE.InstancedMesh(tileGeo, waterTileMat, cap);
     groundRavineMesh=new THREE.InstancedMesh(tileGeo, ravMat, cap);
     [groundMesh,groundShoreMesh,groundUrbanMesh,groundIslandMesh,groundWaterMesh,groundRavineMesh].forEach(m=>{
-      m.frustumCulled=false; scene.add(m);
+      m.frustumCulled=false;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      scene.add(m);
     });
     groundPool=cap;
   }
@@ -2339,11 +2401,15 @@ function refreshGroundInstances(){
   if(LARGE_MAP){
     const cx=clamp(Math.floor(orbit.target.x), 0, COLS-1);
     const cy=clamp(Math.floor(orbit.target.z), 0, ROWS-1);
-    const r=Math.max(CHUNK, Math.floor(orbit.spherical.radius*1.1));
+    const r=Math.min(STREAM_MAX_R, Math.max(CHUNK, Math.floor(orbit.spherical.radius*0.85)));
     x0=Math.max(0, cx-r); x1=Math.min(COLS-1, cx+r);
     y0=Math.max(0, cy-r); y1=Math.min(ROWS-1, cy+r);
-    const key=x0+','+y0+','+x1+','+y1;
+    const q=8;
+    const key=((x0/q)|0)+','+((y0/q)|0)+','+((x1/q)|0)+','+((y1/q)|0)+','+((r/q)|0);
     if(key===groundChunkKey && !worldDirty) return;
+    const now=performance.now();
+    if(!worldDirty && now-_groundRefreshAt<90) return;
+    _groundRefreshAt=now;
     groundChunkKey=key;
   }
   let iLand=0, iShore=0, iUrban=0, iIsland=0, iWater=0, iRav=0;
@@ -2353,34 +2419,33 @@ function refreshGroundInstances(){
   for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){
     const code=maskCode(x,y);
     const elev=computeElev(x,y,code,shoreYAt(x));
+    const h=0.12; /* uniform slab — flat playable plane */
     if(code===1){
-      const shore=nearTerrain(x,y,'land',1)||nearTerrain(x,y,'ravine',1);
-      const h=shore?0.14:0.09;
-      const yPos=shore?-0.28:-0.48;
-      _dummy.position.set(x+0.5,yPos,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      _dummy.position.set(x+0.5, elev, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       if(iWater<maxInst) groundWaterMesh.setMatrixAt(iWater++,_dummy.matrix);
     } else if(code===4){
-      /* deep lake / off-map — skip instances (background shows through) */
+      /* off-map / deep lake — LOD + water backdrop */
     } else if(code===2){
-      _dummy.position.set(x+0.5,elev-0.08,y+0.5); _dummy.scale.set(1,0.14,1); _dummy.updateMatrix();
+      _dummy.position.set(x+0.5, 0, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       if(iRav<maxInst) groundRavineMesh.setMatrixAt(iRav++,_dummy.matrix);
     } else if(code===3){
-      _dummy.position.set(x+0.5,0.08+elev,y+0.5); _dummy.scale.set(1,0.2,1); _dummy.updateMatrix();
+      _dummy.position.set(x+0.5, 0, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       if(iIsland<maxInst) groundIslandMesh.setMatrixAt(iIsland++,_dummy.matrix);
     } else if(nearTerrain(x,y,'water',1)){
-      const bluff=x>COLS*0.60&&x<COLS*0.74;
-      const h=bluff?0.28:0.16;
-      _dummy.position.set(x+0.5, elev+(bluff?0.08:0.02), y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      _dummy.position.set(x+0.5, 0, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       if(iShore<maxInst) groundShoreMesh.setMatrixAt(iShore++,_dummy.matrix);
     } else {
       const lv=computeLandValue(x,y,code,cityCenter.x,cityCenter.y);
-      const h=0.16+Math.min(0.14, elev*0.4);
-      _dummy.position.set(x+0.5, elev+0.05, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
+      _dummy.position.set(x+0.5, 0, y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
       if(lv>62){ if(iUrban<maxInst) groundUrbanMesh.setMatrixAt(iUrban++,_dummy.matrix); }
       else { if(iLand<maxInst) groundMesh.setMatrixAt(iLand++,_dummy.matrix); }
     }
   }
-  const hideRest=(mesh, start)=>{ while(start<maxInst) mesh.setMatrixAt(start++, hideMat); mesh.instanceMatrix.needsUpdate=true; mesh.count=maxInst; };
+  const hideRest=(mesh, start)=>{
+    while(start<maxInst) mesh.setMatrixAt(start++, hideMat);
+    mesh.instanceMatrix.needsUpdate=true;
+    mesh.count=maxInst;
+  };
   hideRest(groundMesh, iLand);
   hideRest(groundShoreMesh, iShore);
   hideRest(groundUrbanMesh, iUrban);
@@ -2508,8 +2573,7 @@ function upsertStructure(x,y){
   const def=toolById[t.type];
   const h=structureHeight(t);
   const bridge=def&&def.bridge;
-  const groundElev=(t.elev!=null)?t.elev:0;
-  const elev=isRoad(t)?roadDeckElev(x,y,t):(bridge?0.68:0.12+Math.max(0, groundElev));
+  const elev=isRoad(t)?roadDeckElev(x,y,t):0.12;
   let mesh;
 
   /* ---- CN Tower ploppable ---- */
@@ -2692,25 +2756,15 @@ function upsertStructure(x,y){
       stripe.position.y=markY+0.001; g.add(stripe);
     }
     if(overWater){
-      const pierH=Math.max(0.42, elev+0.12);
-      [[-0.22,-0.18],[0.22,0.18]].forEach(([px,pz])=>{
-        const pier=new THREE.Mesh(cylGeo(0.07,0.09,pierH,8), mat(0x5a5850,1,'flat'));
-        pier.position.set(px, -pierH/2+0.02, pz); g.add(pier);
-      });
-      const beam=new THREE.Mesh(boxGeo(0.7,0.07,0.18), mat(0x6a6860,1,'flat'));
-      beam.position.y=0.02; g.add(beam);
+      /* Flat bridge — light rails only, no tall piers */
       [-1,1].forEach(side=>{
         const rail=new THREE.Mesh(boxGeo(laneW*0.95, 0.04, 0.03), mat(0x8a8880,1,'flat'));
-        rail.position.set(0, deckH+0.12, side*(laneW*0.5+0.02)); g.add(rail);
-        for(let p=0;p<3;p++){
-          const post=new THREE.Mesh(cylGeo(0.018,0.018,0.14,5), mat(0x7a7870,1,'flat'));
-          post.position.set((p-1)*0.22, deckH+0.07, side*(laneW*0.5+0.02)); g.add(post);
-        }
+        rail.position.set(0, deckH+0.08, side*(laneW*0.5+0.02)); g.add(rail);
       });
-    } else if(bridge&&elev>0.25){
+    } else if(bridge){
       [-1,1].forEach(side=>{
         const rail=new THREE.Mesh(boxGeo(laneW*0.7, 0.03, 0.025), mat(0x8a8880,1,'flat'));
-        rail.position.set(0, deckH+0.1, side*(laneW*0.48)); g.add(rail);
+        rail.position.set(0, deckH+0.08, side*(laneW*0.48)); g.add(rail);
       });
     }
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
@@ -2948,6 +3002,7 @@ renderGoals();
 /* ---- Input ---- */
 function pickTile(cx,cy){
   const rect=canvas.getBoundingClientRect();
+  if(!rect.width||!rect.height) return null;
   pointer.x=((cx-rect.left)/rect.width)*2-1;
   pointer.y=-((cy-rect.top)/rect.height)*2+1;
   raycaster.setFromCamera(pointer,camera);
@@ -2960,19 +3015,23 @@ function pickTile(cx,cy){
 }
 
 function isBuildableTerrain(tile){
-  /* Ravines are recessed land — still buildable. Water/void block normal build. */
-  return !!tile && tile.terrain!=='water' && tile.terrain!=='void' && (tile.terrain==='land' || tile.terrain==='ravine' || tile.island);
+  /* Only open land is buildable. Water / void / ravine / islands = protected or unbuildable. */
+  return !!tile && tile.terrain==='land' && !tile.island;
 }
 function canPlace(def, tile){
   if(!def||!tile) return false;
-  if(def.bridge) return tile.terrain==='ravine'||tile.terrain==='water'||tile.terrain==='land'||tile.island;
+  if(def.bridge) return tile.terrain==='ravine'||tile.terrain==='water'||tile.terrain==='land';
   if(def.id==='harbor'||def.id==='ferry') return isBuildableTerrain(tile);
-  if(tile.terrain==='water' && !tile.island) return false;
+  if(tile.terrain==='water'||tile.terrain==='void') return false;
+  if(tile.terrain==='ravine'||tile.island) return false;
   return isBuildableTerrain(tile);
 }
 
 function applyTool(pos){
-  if(!pos) return;
+  if(!pos){
+    if(painting) showToast('Aim the cursor at the map to build.', 'warn', 1400);
+    return;
+  }
   const {x,y}=pos; const tile=grid[x][y]; const def=toolById[selectedTool];
   if(!def||selectedTool==='query') return;
 
@@ -3004,36 +3063,60 @@ function applyTool(pos){
     if(tile.terrain==='ravine'||tile.terrain==='water'){
       /* ok */
     } else if(isBuildableTerrain(tile)){
-      if(tile.type!=='empty'&&!isRoad(tile)) return;
+      if(tile.type!=='empty'&&!isRoad(tile)){
+        showToast('Clear this tile first (bulldoze).', 'warn', 1600);
+        return;
+      }
     } else {
-      showToast('Cannot build here.', 'warn', 1600);
+      showToast('Cannot build a bridge here.', 'warn', 1600);
       return;
     }
   } else {
-    if(tile.terrain==='water' && !tile.island){
+    if(tile.terrain==='water'){
       showToast('Need a <b>bridge</b> to cross water.', 'warn', 2000);
       return;
     }
+    if(tile.terrain==='ravine'){
+      showToast('Protected ravine — use a <b>bridge</b> to cross.', 'warn', 2200);
+      return;
+    }
+    if(tile.island){
+      showToast('Islands are protected parkland.', 'warn', 2000);
+      return;
+    }
+    if(tile.terrain==='void'){
+      showToast('Off-map / deep water — cannot build.', 'warn', 1800);
+      return;
+    }
     if(!isBuildableTerrain(tile)){
-      showToast('Cannot build on water.', 'warn', 1600);
+      showToast('Cannot build here ('+(tile.terrain||'?')+').', 'warn', 1600);
       return;
     }
     if(def.zone){
-      if(tile.type!=='empty') return;
+      if(tile.type!=='empty'){
+        showToast('Tile occupied — bulldoze first.', 'warn', 1600);
+        return;
+      }
       if(!hasRoadAccess(x,y)){
         showToast('Zones must be placed <b>beside a road</b>.', 'warn', 2400);
         return;
       }
     } else if(def.park||def.power||def.water||def.svc||def.waste||def.jobs||['stadium','airport','cityhall','cntower','postoffice','metro','busdepot','trainpass','traincargo','harbor','ferry','monorail','drain','tradeschool','cemetery','naturereserve','zoo','amusement'].includes(def.id)){
-      if(tile.type!=='empty') return;
+      if(tile.type!=='empty'){
+        showToast('Tile occupied — bulldoze first.', 'warn', 1600);
+        return;
+      }
     } else if(def.road){
-      if(tile.type!=='empty'&&!isRoad(tile)) return;
+      if(tile.type!=='empty'&&!isRoad(tile)){
+        showToast('Tile occupied — bulldoze first.', 'warn', 1600);
+        return;
+      }
     }
   }
 
   if(tile.type===def.id) return; /* already this tool — don't re-bill */
   const cost=Number(def.cost)||0;
-  if(money<cost){flashFunds();return}
+  if(money<cost){flashFunds(); showToast('Not enough funds ($'+cost+').', 'warn', 1800); return}
   money-=cost;
   tile.type=def.id; tile.level=0; tile.buildPhase=0; tile.zoneAge=0; tile.abandoned=false;
   tile.parkId=def.parkId||null; tile.parkName=def.parkName||null; tile.spec=def.spec||null;
@@ -3774,7 +3857,7 @@ function updateInspect(pos){
   const t=grid[pos.x][pos.y]; const def=toolById[t.type];
   let name=def?def.label:(t.type==='empty'?'Vacant':'Unknown');
   if(t.parkName) name=t.parkName;
-  const terrain=t.terrain==='water'?'Lake Ontario':t.terrain==='ravine'?'River / Ravine':'Land';
+  const terrain=t.terrain==='water'?'Lake Ontario':t.terrain==='ravine'?'Protected ravine':t.island?'Island (protected)':t.terrain==='void'?'Off-map':'Land';
   let extra='';
   if(isZone(t)){
     const stage=t.level<=0?'Vacant':(t.buildPhase>0?'Building…':(t.abandoned?'Abandoned L'+t.level:'L'+t.level));
@@ -3825,9 +3908,7 @@ function updateUI(pr,wr,waster){
     else { tip.className='hud-tip'; tip.innerHTML='<strong>Toronto grows.</strong> Higher density needs power+water. Parks & schools raise land value.'; }
   } else if(population===0){
     tip.className='hud-tip';
-    tip.innerHTML=gameSettings.with401!==false
-      ? '<strong>Get population:</strong> Road south from the <b>401</b> → Zone <b>R Low</b> → <b>Wind</b> + <b>Water Tower</b> → ▶▶.'
-      : '<strong>Get population:</strong> Lay roads inland → Zone <b>R Low</b> → <b>Wind</b> + <b>Water Tower</b> → ▶▶.';
+    tip.innerHTML='<strong>Get population:</strong> Lay a <b>Street</b> → Zone <b>R Low</b> beside it → <b>Wind</b> + <b>Water Tower</b> → ▶▶.';
   } else {
     tip.className='hud-tip';
     tip.innerHTML='<strong>Toronto grows.</strong> Goals: 100 → 1k → 10k pop · High Park · CN Tower · Airport/Stadium · Metro Toronto. <b>Space</b> pause · <b>B</b> bulldoze.';
@@ -3888,7 +3969,7 @@ document.getElementById('btn-load').onclick=()=>{
       if(grid[x][y].type==='cntower') milestones.cntower=true;
       if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
     }
-    placeLabels(Math.floor(ROWS*0.30)); worldDirty=true; structuresDirty=true; applySeasonLook();
+    placeLabels(); worldDirty=true; structuresDirty=true; applySeasonLook();
     recomputeUtilities(); updateUI(1,1,1); renderGoals(); renderToolbar(); applyTutorialFocus();
     log('Loaded.');
   }catch(e){log('Load failed',true)}
@@ -3931,7 +4012,7 @@ function applyNewGame(settings){
         if(grid[x][y].type==='cntower') milestones.cntower=true;
         if(grid[x][y].type==='airport'||grid[x][y].type==='stadium') milestones.landmark=true;
       }
-      placeLabels(Math.floor(ROWS*0.30));
+      placeLabels();
       logEl.innerHTML=''; log('Continued saved city.');
     }catch(e){
       makeTerrain();
@@ -3952,7 +4033,7 @@ function applyNewGame(settings){
     bankruptLatched=false; hideAlert();
     logEl.innerHTML='';
     const modeName=(MODE_PRESETS[gameSettings.mode]||MODE_PRESETS.classic).label;
-    log(modeName+' mode — '+(gameSettings.with401!==false?'Highway 401 is ready.':'Empty shoreline. Lay your first roads.'));
+    log(modeName+' mode — blank map. Lay your first roads.');
   }
   worldDirty=true; structuresDirty=true; utilDirty=true; infDirty=true;
   applySeasonLook(); recomputeUtilities(); updateUI(1,1,1); setSpeed(1);
@@ -3971,12 +4052,28 @@ window.addEventListener('resize',resize); resize(); updateCamera();
 
 function projectLabels(){
   const w=wrap.clientWidth,h=wrap.clientHeight;
-  const hide=orbit.spherical.radius>70;
+  const R=orbit.spherical.radius;
+  /* Visible when zoomed out; denser nameplates when closer */
+  const showNames=R<220;
+  const minSep=R>180?28:R>100?22:16;
+  const placed=[];
   for(const el of labelEls){
-    if(hide){el.style.display='none';continue}
-    const v=new THREE.Vector3(el._lm.x+0.5,1.2,el._lm.y+0.5); v.project(camera);
-    if(v.z>1||Math.abs(v.x)>1.2||Math.abs(v.y)>1.2){el.style.display='none';continue}
-    el.style.display='block'; el.style.left=((v.x*0.5+0.5)*w)+'px'; el.style.top=((-v.y*0.5+0.5)*h)+'px';
+    const lm=el._lm;
+    const v=new THREE.Vector3(lm.x+0.5, 1.4, lm.y+0.5); v.project(camera);
+    if(v.z>1||Math.abs(v.x)>1.35||Math.abs(v.y)>1.35){ el.style.display='none'; continue; }
+    const px=(v.x*0.5+0.5)*w, py=(-v.y*0.5+0.5)*h;
+    let clash=false;
+    for(let i=0;i<placed.length;i++){
+      if(Math.hypot(px-placed[i][0], py-placed[i][1])<minSep){ clash=true; break; }
+    }
+    if(clash && lm.tier!=='city'){ el.style.display='none'; continue; }
+    placed.push([px,py]);
+    el.classList.toggle('far', !showNames || R>160);
+    el.style.display='flex';
+    el.style.left=px+'px';
+    el.style.top=py+'px';
+    const scale=clamp(14/Math.max(8, R*0.045), 0.7, 1.35);
+    el.style.transform='translate(-50%,-100%) scale('+scale+')';
   }
 }
 
@@ -4030,7 +4127,7 @@ if(gameSettings.continueSave){
         if(tp==='cntower') milestones.cntower=true;
         if(tp==='airport'||tp==='stadium') milestones.landmark=true;
       }
-      placeLabels(Math.floor(ROWS*0.30)); worldDirty=true; structuresDirty=true; applySeasonLook(); recomputeUtilities(); updateUI(1,1,1);
+      placeLabels(); worldDirty=true; structuresDirty=true; applySeasonLook(); recomputeUtilities(); updateUI(1,1,1);
       renderGoals(); renderToolbar();
       if(guideEl) guideEl.classList.add('hidden');
       log('Continued saved city.');
@@ -4042,11 +4139,24 @@ if(gameSettings.continueSave){
   applyTutorialFocus();
 }
 animate();
+/* Browser / QA proof: place a street on spawn land and report result */
+window.__metroProofBuild=function(){
+  try{
+    selectTool('road');
+    const x=_spawn[0]|0, y=_spawn[1]|0;
+    const before=grid[x][y].type;
+    const terrain=grid[x][y].terrain;
+    applyTool({x,y});
+    const after=grid[x][y].type;
+    const ok=after==='road';
+    return {ok, x, y, terrain, before, after, money, selectedTool, land:isLandMask(x,y), spawn:_spawn};
+  }catch(err){
+    return {ok:false, error:String(err&&err.message||err)};
+  }
+};
 const modeName=(MODE_PRESETS[gameSettings.mode]||MODE_PRESETS.classic).label;
 log('Metro Builder Toronto — '+modeName+' mode.');
-log(gameSettings.with401!==false
-  ? 'Tip: Connect a street south from the 401, zone R Low beside it, add wind + water.'
-  : 'Tip: Lay roads from the harbour inland, zone R Low, add wind + water.');
+log('Tip: Lay a street on open land, zone R Low beside it, add wind + water.');
 log('Tip: Cities: Skylines controls — LMB build · MMB rotate/tilt · RMB drag pan · edge/WASD pan · wheel zoom · Esc cancel · Q/E · Z/X · Home/End · Space pause · 1/2/3 speed · B bulldoze · 4–9 zones.');
 log('Tip: Disasters (lobby toggle) — fires need Fire Halls, floods need drains/treatment, blizzards hit winter.');
 } /* end startGame */
