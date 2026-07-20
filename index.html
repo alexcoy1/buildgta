@@ -846,9 +846,18 @@ function waterTileColor(x,y){
 }
 
 function rebuildGround(){
-  if(groundMesh){scene.remove(groundMesh);groundMesh.geometry.dispose();groundMesh.material.dispose()}
-  const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.98,1,0.98), new THREE.MeshStandardMaterial({roughness:0.88, metalness:0.04}), COLS*ROWS);
-  mesh.receiveShadow=true;
+  if(!groundMesh){
+    const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.98,1,0.98), new THREE.MeshStandardMaterial({roughness:0.88, metalness:0.04}), COLS*ROWS);
+    mesh.receiveShadow=true;
+    groundMesh=mesh;
+    scene.add(mesh);
+  }
+  refreshGroundInstances();
+}
+
+/* Update ground in place — never dispose/recreate (stops map flicker) */
+function refreshGroundInstances(){
+  if(!groundMesh) return;
   let i=0;
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y];
@@ -857,15 +866,16 @@ function rebuildGround(){
       const shore=nearTerrain(x,y,'land',1)||nearTerrain(x,y,'ravine',1);
       h=shore?0.12:0.08; y0=shore?-0.22:-0.38; col=waterTileColor(x,y);
     } else if(t.terrain==='ravine'){
-      h=0.38; y0=-0.1; col=seasonIdx===3?0x3a5540:0x1a3820; /* deep Don/Humber green */
+      h=0.38; y0=-0.1; col=seasonIdx===3?0x3a5540:0x1a3820;
     } else if(t.island){
       h=0.22; y0=0.11;
     }
     _dummy.position.set(x+0.5,y0,y+0.5); _dummy.scale.set(1,h,1); _dummy.updateMatrix();
-    mesh.setMatrixAt(i,_dummy.matrix); _color.setHex(col); mesh.setColorAt(i,_color); i++;
+    groundMesh.setMatrixAt(i,_dummy.matrix); _color.setHex(col); groundMesh.setColorAt(i,_color); i++;
   }
-  mesh.instanceMatrix.needsUpdate=true; if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
-  groundMesh=mesh; scene.add(mesh); worldDirty=false;
+  groundMesh.instanceMatrix.needsUpdate=true;
+  if(groundMesh.instanceColor) groundMesh.instanceColor.needsUpdate=true;
+  worldDirty=false;
 }
 
 function structureHeight(t){
@@ -974,8 +984,15 @@ function addWindowEmissive(mesh, w, h, intensity){
   }
 }
 
+function structureSig(t){
+  return t.type+'|'+t.level+'|'+(t.parkId||'')+'|'+(t.spec||'');
+}
+
 function upsertStructure(x,y){
   const key=x+','+y, t=grid[x][y], old=structureKey.get(key);
+  const sig=structureSig(t);
+  /* Keep existing mesh if nothing visual changed — stops flicker */
+  if(old && t.type!=='empty' && old.userData && old.userData.sig===sig) return;
   if(old){structureRoot.remove(old); disposeObject3D(old); structureKey.delete(key)}
   if(t.type==='empty') return;
   const def=toolById[t.type];
@@ -1008,7 +1025,7 @@ function upsertStructure(x,y){
       const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,0.18,5), new THREE.MeshStandardMaterial({color:0x4a3020}));
       const foliage=new THREE.Mesh(
         new THREE.ConeGeometry(0.14+noise2(x+i,y)*0.06, 0.38+noise2(y,x+i)*0.12, 6),
-        new THREE.MeshStandardMaterial({color:seasonIdx===3?0xc8d4c8:(seasonIdx===2?0x8a6030:0x2a5528), roughness:0.9})
+        new THREE.MeshStandardMaterial({color:0x2a5528, roughness:0.9})
       );
       const px=(noise2(x*2+i,y)-0.5)*0.55, pz=(noise2(x,y*2+i)-0.5)*0.55;
       trunk.position.set(px,0.17,pz); foliage.position.set(px,0.42,pz);
@@ -1102,7 +1119,7 @@ function upsertStructure(x,y){
 
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
-  mesh.userData={x,y};
+  mesh.userData={x,y,sig};
   structureRoot.add(mesh); structureKey.set(key,mesh);
 }
 
@@ -1370,7 +1387,12 @@ function tick(){
   const prev=seasonIdx;
   seasonIdx=Math.floor(day/DAYS)%4;
   year=1+Math.floor(day/(DAYS*4));
-  if(seasonIdx!==prev){ log(`${SEASONS[seasonIdx]} arrives.`,true); worldDirty=true; structuresDirty=true; applySeasonLook(); }
+  if(seasonIdx!==prev){
+    log(`${SEASONS[seasonIdx]} arrives.`,true);
+    applySeasonLook();
+    /* Tint ground only — do NOT rebuild structures (that caused flicker) */
+    refreshGroundInstances();
+  }
   recomputeUtilities();
 
   let pop=0,jb=0,pCap=0,wCap=0,wasteC=0;
@@ -1503,7 +1525,8 @@ function refreshLandValue(){
     if(nearType(x,y,'university',10)||nearType(x,y,'school',6)) v+=6;
     t.landValue=clamp(Math.round(v),5,100);
   }
-  worldDirty=true;
+  /* Soft ground tint update — no mesh dispose */
+  refreshGroundInstances();
 }
 
 function runBudget(svc,roads){
@@ -1662,6 +1685,7 @@ function projectLabels(){
 let _camLastT=performance.now();
 function animate(){
   requestAnimationFrame(animate);
+  /* Only rebuild when explicitly dirtied — placed tiles stay put */
   if(worldDirty) rebuildGround();
   if(structuresDirty) rebuildAllStructures();
   const now=performance.now();
@@ -1669,11 +1693,9 @@ function animate(){
   _camLastT=now;
   stepCamera(dt);
   const t=now*0.001;
-  /* Lake Ontario teal shimmer */
+  /* Gentle water shimmer (material only — no mesh recreate) */
   const pulse=0.5+0.5*Math.sin(t*0.7);
-  waterMat.color.setRGB(0.08+pulse*0.02, 0.38+Math.sin(t*0.9)*0.04, 0.45+Math.cos(t*0.6)*0.03);
-  waterMat.emissiveIntensity=0.12+pulse*0.06;
-  harbourMat.opacity=0.45+0.1*Math.sin(t*0.5);
+  waterMat.emissiveIntensity=0.12+pulse*0.05;
   if(insufficientFlash>0){renderer.setClearColor(0x3a1520);insufficientFlash--; if(insufficientFlash===0) applySeasonLook();}
   renderer.render(scene,camera); projectLabels();
 }
