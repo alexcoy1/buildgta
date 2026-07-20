@@ -29,7 +29,7 @@ button.ctl.ghost{background:transparent;color:var(--dim)}
 .canvas-wrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 70%,#143040 0%,#0a1520 55%,#071018 100%);cursor:crosshair}
 #game{display:block;width:100%;height:100%}
 .label-layer{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
-.map-label{position:absolute;transform:translate(-50%,-100%);font-size:8px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:rgba(232,236,232,.28);text-shadow:0 1px 4px rgba(0,0,0,.7);white-space:nowrap;opacity:.85}
+.map-label{position:absolute;transform:translate(-50%,-100%);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.55);text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.5);white-space:nowrap;pointer-events:none}
 .hud-tip{position:absolute;left:10px;bottom:10px;z-index:3;background:rgba(18,32,40,.94);border:1px solid rgba(26,107,124,.35);border-left:3px solid var(--ttc);padding:9px 12px;border-radius:4px;font-size:11px;color:var(--dim);max-width:380px;pointer-events:none;backdrop-filter:blur(4px)}
 .hud-tip strong{color:var(--ink)}.hud-tip.warn{border-color:var(--warn);border-left-color:var(--warn);color:#f0d090}
 aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);border-left:1px solid rgba(168,166,158,.12);padding:12px;display:flex;flex-direction:column;gap:11px;overflow-y:auto;z-index:6}
@@ -86,7 +86,7 @@ aside.panel{width:278px;background:linear-gradient(180deg,#152830,#122028);borde
 <div class="app" id="app-root" style="visibility:hidden">
 <header class="board">
   <div class="brand">METRO BUILDER · <span>TORONTO</span></div>
-  <div class="stat"><label>Treasury</label><div class="val" id="stat-money">$0</div></div>
+  <div class="stat"><label>Treasury</label><div class="val" id="stat-money">$55,000</div></div>
   <div class="stat"><label>Population</label><div class="val" id="stat-pop">0</div></div>
   <div class="stat"><label>Jobs</label><div class="val" id="stat-jobs">0</div></div>
   <div class="stat"><label>Unemp.</label><div class="val" id="stat-unemp">0%</div></div>
@@ -403,34 +403,21 @@ function makeTerrain(){
     if(y<ROWS*0.35) v-=4;
     grid[x][y].landValue=clamp(Math.round(v+noise2(x,y)*8),15,95);
   }
-  // HIGHWAY 401 — east-west across mid-north
+  // HIGHWAY 401 — single clear east-west corridor (mid-north)
   const y401=Math.floor(ROWS*0.28);
   for(let x=0;x<COLS;x++){
-    if(grid[x][y401].terrain==='ravine'){
-      grid[x][y401].type='hwybridge';
-    } else if(grid[x][y401].terrain==='land'){
-      grid[x][y401].type='highway';
-    } else if(grid[x][y401].terrain==='water'){
-      grid[x][y401].type='hwybridge';
-    }
-    grid[x][y401].level=0;
+    const cell=grid[x][y401];
+    if(cell.terrain==='ravine'||cell.terrain==='water') cell.type='hwybridge';
+    else if(cell.terrain==='land') cell.type='highway';
+    cell.level=0;
   }
-  // dual carriageway feel — second lane north of 401 on land
-  const y401b=y401-1;
-  for(let x=0;x<COLS;x++){
-    if(grid[x][y401b].terrain==='land'){grid[x][y401b].type='highway';grid[x][y401b].level=0}
-    else if(grid[x][y401b].terrain==='ravine'||grid[x][y401b].terrain==='water'){grid[x][y401b].type='hwybridge';grid[x][y401b].level=0}
-  }
-
   placeLabels(y401);
   worldDirty=true; structuresDirty=true;
 }
 
 function placeLabels(y401){
   landmarks=[
-    [Math.floor(COLS*0.48), y401, '401'],
-    [Math.floor(COLS*0.20), y401, 'Highway 401'],
-    [Math.floor(COLS*0.70), y401, '401'],
+    [Math.floor(COLS*0.48), y401, 'Highway 401'],
     [Math.floor(COLS*0.48), Math.floor(ROWS*0.72), 'Downtown'],
     [Math.floor(COLS*0.55), Math.floor(ROWS*0.78), 'Distillery'],
     [Math.floor(COLS*0.22), Math.floor(ROWS*0.55), 'High Park'],
@@ -477,42 +464,38 @@ makeTerrain();
 /* ---- Three.js + custom orbit (RTS / city-builder) ---- */
 const wrap=document.getElementById('wrap');
 const canvas=document.getElementById('game');
-const renderer=new THREE.WebGLRenderer({canvas, antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const renderer=new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
 renderer.setClearColor(0x0c1a24);
-renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled=false;
 
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0x152830, 0.0075);
+scene.fog=new THREE.FogExp2(0x152830, 0.0065);
 const camera=new THREE.PerspectiveCamera(42,1,0.1,400);
-/* Default: north of the 401, looking south toward harbour / downtown */
+/* North of the 401, looking south at downtown / harbour */
 const y401cam=Math.floor(ROWS*0.28);
-camera.position.set(COLS*0.48+6, 36, y401cam-8);
+camera.position.set(COLS*0.48, 42, y401cam - 18);
 
 const ORBIT_DEG=Math.PI/180;
 const orbit={
-  target:new THREE.Vector3(COLS*0.48,0,ROWS*0.62),
+  target:new THREE.Vector3(COLS*0.48, 0, Math.floor(ROWS*0.55)),
   spherical:new THREE.Spherical(),
   goal:new THREE.Spherical(),
   rotating:false, panning:false, paintingActive:false,
   pointerId:null,
   lastX:0, lastY:0,
-  damping:0.18,
-  rotateSpeed:0.005,
-  panFactor:0.00125,
-  keyPanFactor:0.62,
-  minR:8, maxR:100,
-  minPhi:18*ORBIT_DEG,
-  maxPhi:82*ORBIT_DEG
+  rotateSpeed:0.0045,
+  panFactor:0.0014,
+  keyPanFactor:0.75,
+  minR:12, maxR:90,
+  minPhi:25*ORBIT_DEG,
+  maxPhi:78*ORBIT_DEG
 };
 const camKeys={w:false,a:false,s:false,d:false,up:false,down:false,left:false,right:false,shift:false,space:false};
 const _panRight=new THREE.Vector3();
 const _panFwd=new THREE.Vector3();
 const _panUp=new THREE.Vector3(0,1,0);
 const _panEye=new THREE.Vector3();
-const _zoomHitA=new THREE.Vector3();
-const _zoomHitB=new THREE.Vector3();
 const _zoomOffset=new THREE.Vector3();
 const raycaster=new THREE.Raycaster();
 const pointer=new THREE.Vector2();
@@ -524,70 +507,34 @@ orbit.spherical.phi=clamp(orbit.spherical.phi, orbit.minPhi, orbit.maxPhi);
 orbit.spherical.radius=clamp(orbit.spherical.radius, orbit.minR, orbit.maxR);
 orbit.goal.copy(orbit.spherical);
 
-function syncSphericalFromGoal(){
-  orbit.spherical.radius=orbit.goal.radius;
-  orbit.spherical.phi=orbit.goal.phi;
-  orbit.spherical.theta=orbit.goal.theta;
-}
-
 function applyOrbitToCamera(){
-  _zoomOffset.setFromSpherical(orbit.spherical);
+  _zoomOffset.setFromSpherical(orbit.goal);
   camera.position.copy(orbit.target).add(_zoomOffset);
   camera.lookAt(orbit.target);
 }
+function updateCamera(){ applyOrbitToCamera(); }
 
-function updateCamera(immediate){
-  if(immediate!==false) syncSphericalFromGoal();
-  applyOrbitToCamera();
-}
-
-/* Single camera step per frame — no double-apply / fighting */
+/* Instant camera — no damping lag */
 function stepCamera(dt){
-  const interacting=orbit.rotating||orbit.panning;
-  if(!interacting && !orbit.paintingActive){
-    panOrbitKeys(dt);
-  }
-  if(interacting){
-    syncSphericalFromGoal();
-  } else {
-    /* Frame-rate independent damping; skip when already synced */
-    const dr=orbit.goal.radius-orbit.spherical.radius;
-    const dp=orbit.goal.phi-orbit.spherical.phi;
-    let dTh=orbit.goal.theta-orbit.spherical.theta;
-    while(dTh>Math.PI) dTh-=Math.PI*2;
-    while(dTh<-Math.PI) dTh+=Math.PI*2;
-    if(Math.abs(dr)>1e-5||Math.abs(dp)>1e-5||Math.abs(dTh)>1e-5){
-      const d=1-Math.pow(1-orbit.damping, Math.max(dt,0.001)*60);
-      orbit.spherical.radius+=dr*d;
-      orbit.spherical.phi+=dp*d;
-      orbit.spherical.theta+=dTh*d;
-    }
-  }
+  if(!(orbit.rotating||orbit.panning||orbit.paintingActive)) panOrbitKeys(dt);
   applyOrbitToCamera();
 }
 
 function getPanAxes(){
-  /* Stable axes from goal pose (avoids damp lag + GC from clone) */
   _zoomOffset.setFromSpherical(orbit.goal);
   _panEye.copy(orbit.target).add(_zoomOffset);
   _panFwd.copy(orbit.target).sub(_panEye);
-  if(_panFwd.lengthSq()<1e-8){
-    camera.getWorldDirection(_panFwd);
-  } else {
-    _panFwd.normalize();
-  }
+  if(_panFwd.lengthSq()<1e-8) camera.getWorldDirection(_panFwd);
+  else _panFwd.normalize();
   _panRight.crossVectors(_panFwd, _panUp);
-  if(_panRight.lengthSq()<1e-8){
-    _panRight.set(1,0,0);
-  } else {
-    _panRight.normalize();
-  }
+  if(_panRight.lengthSq()<1e-8) _panRight.set(1,0,0);
+  else _panRight.normalize();
   _panFwd.crossVectors(_panUp, _panRight).normalize();
 }
 
 function clampOrbitTarget(){
-  orbit.target.x=clamp(orbit.target.x,-4,COLS+4);
-  orbit.target.z=clamp(orbit.target.z,-4,ROWS+4);
+  orbit.target.x=clamp(orbit.target.x, 2, COLS-2);
+  orbit.target.z=clamp(orbit.target.z, 2, ROWS-2);
   orbit.target.y=0;
 }
 
@@ -620,49 +567,20 @@ function rotateOrbit(dxPx, dyPx){
   orbit.goal.phi=clamp(orbit.goal.phi-dyPx*orbit.rotateSpeed, orbit.minPhi, orbit.maxPhi);
 }
 
-function zoomOrbit(deltaY, clientX, clientY){
+function zoomOrbit(deltaY){
   if(orbit.paintingActive) return;
-  const prevR=orbit.goal.radius;
-  const factor=Math.exp(deltaY*0.0011);
-  const nextR=clamp(prevR*factor, orbit.minR, orbit.maxR);
-  if(nextR===prevR) return;
-
-  let bx=null, bz=null;
-  if(clientX!=null){
-    const rect=canvas.getBoundingClientRect();
-    pointer.x=((clientX-rect.left)/rect.width)*2-1;
-    pointer.y=-((clientY-rect.top)/rect.height)*2+1;
-    /* Evaluate zoom against current applied camera */
-    raycaster.setFromCamera(pointer,camera);
-    if(raycaster.ray.intersectPlane(groundPlane,_zoomHitA)){ bx=_zoomHitA.x; bz=_zoomHitA.z; }
-  }
-
-  orbit.goal.radius=nextR;
-  syncSphericalFromGoal();
-  applyOrbitToCamera();
-
-  if(bx!=null){
-    raycaster.setFromCamera(pointer,camera);
-    if(raycaster.ray.intersectPlane(groundPlane,_zoomHitB)){
-      orbit.target.x+=bx-_zoomHitB.x;
-      orbit.target.z+=bz-_zoomHitB.z;
-      clampOrbitTarget();
-      applyOrbitToCamera();
-    }
-  }
+  const factor=Math.exp(deltaY*0.001);
+  orbit.goal.radius=clamp(orbit.goal.radius*factor, orbit.minR, orbit.maxR);
 }
 
-const ambient=new THREE.AmbientLight(0xb0c4d0, 0.48);
+const ambient=new THREE.AmbientLight(0xb0c4d0, 0.62);
 scene.add(ambient);
-const sun=new THREE.DirectionalLight(0xfff0d8, 0.95);
-sun.position.set(48,62,18); sun.castShadow=true;
-sun.shadow.mapSize.set(1024,1024);
-sun.shadow.camera.near=1; sun.shadow.camera.far=180;
-sun.shadow.camera.left=-50; sun.shadow.camera.right=50;
-sun.shadow.camera.top=50; sun.shadow.camera.bottom=-50;
+const sun=new THREE.DirectionalLight(0xfff0d8, 0.85);
+sun.position.set(48,62,18);
+sun.castShadow=false;
 scene.add(sun);
-const fill=new THREE.DirectionalLight(0x5a90a8, 0.28); fill.position.set(-35,22,-45); scene.add(fill);
-const hemi=new THREE.HemisphereLight(0x8eb8c8, 0x2a3a28, 0.22); scene.add(hemi);
+const fill=new THREE.DirectionalLight(0x5a90a8, 0.32); fill.position.set(-35,22,-45); scene.add(fill);
+const hemi=new THREE.HemisphereLight(0x8eb8c8, 0x2a3a28, 0.28); scene.add(hemi);
 
 /* Lake Ontario underlay — animated teal */
 const waterMat=new THREE.MeshStandardMaterial({color:0x156878, roughness:0.35, metalness:0.18, emissive:0x042028, emissiveIntensity:0.15});
@@ -871,15 +789,13 @@ function addWindowEmissive(mesh, w, h, intensity){
     color:0x1a2430, emissive:0xffe8a0, emissiveIntensity:intensity,
     roughness:0.3, metalness:0.2
   });
-  const rows=Math.min(10, Math.max(2, Math.floor(h/0.38)));
-  const cols=3;
+  const rows=Math.min(4, Math.max(1, Math.floor(h/0.5)));
+  const cols=2;
   for(let r=0;r<rows;r++){
     for(let c=0;c<cols;c++){
-      if((r+c+Math.floor(noise2(r,c)*3))%3===0) continue; /* irregular lit windows */
-      const win=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.1,0.02), winMat.clone());
-      win.position.set((c-1)*w*0.28, -h/2+0.25+r*0.32, w/2+0.01);
+      const win=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.12,0.02), winMat);
+      win.position.set((c-0.5)*w*0.35, -h/2+0.3+r*0.4, w/2+0.01);
       mesh.add(win);
-      const win2=win.clone(); win2.position.z=-(w/2+0.01); win2.rotation.y=Math.PI; mesh.add(win2);
     }
   }
 }
@@ -950,15 +866,10 @@ function upsertStructure(x,y){
       sw.position.set(-w/2+0.06,0.06,0); sw2.position.set(w/2-0.06,0.06,0);
       g.add(sw); g.add(sw2);
     }
-    /* Highway 401 yellow dashed markings */
+    /* Highway yellow center line (simple — avoids noisy dual markings) */
     if(t.type==='highway'||t.type==='hwybridge'){
-      const mark=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.02,0.35), new THREE.MeshStandardMaterial({color:0xe8c840, emissive:0x886610, emissiveIntensity:0.08}));
-      mark.position.set(-0.12,deckH+0.015,0); g.add(mark);
-      const mark2=mark.clone(); mark2.position.x=0.12; g.add(mark2);
-      /* shoulder edge */
-      const edge=new THREE.Mesh(new THREE.BoxGeometry(w*0.98,0.015,0.04), new THREE.MeshStandardMaterial({color:0xd0d0c8}));
-      edge.position.set(0,deckH+0.01,-w/2+0.05); g.add(edge);
-      const edge2=edge.clone(); edge2.position.z=w/2-0.05; g.add(edge2);
+      const mark=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.02,0.4), new THREE.MeshStandardMaterial({color:0xe8c840}));
+      mark.position.set(0,deckH+0.015,0); g.add(mark);
     }
     /* TTC red stripe */
     if(t.type==='transit'||t.type==='transitbridge'){
@@ -987,7 +898,7 @@ function upsertStructure(x,y){
       color:col, roughness:isTower?0.45:0.72, metalness:isTower?0.22:0.06,
       emissive: isTower?0x1a2030:0x000000, emissiveIntensity:isTower?0.08:0
     }));
-    body.position.y=h/2; body.castShadow=true; body.receiveShadow=true; g.add(body);
+    body.position.y=h/2; g.add(body);
 
     if(isZone(t)&&t.level===1&&!high){
       /* small house roof */
@@ -1152,7 +1063,6 @@ canvas.addEventListener('pointerdown',e=>{
       orbit.panning=true; orbit.paintingActive=false; painting=false; orbit.rotating=false;
       orbit.pointerId=e.pointerId;
       orbit.lastX=e.clientX; orbit.lastY=e.clientY;
-      syncSphericalFromGoal();
       canvas.setPointerCapture(e.pointerId);
     } else {
       /* Left = paint only — never orbit/pan */
@@ -1167,7 +1077,6 @@ canvas.addEventListener('pointerdown',e=>{
     orbit.rotating=true; orbit.panning=false; painting=false; orbit.paintingActive=false;
     orbit.pointerId=e.pointerId;
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
-    syncSphericalFromGoal();
     canvas.setPointerCapture(e.pointerId);
   } else if(e.button===1){
     e.preventDefault();
@@ -1175,7 +1084,6 @@ canvas.addEventListener('pointerdown',e=>{
     orbit.panning=true; orbit.rotating=false; painting=false; orbit.paintingActive=false;
     orbit.pointerId=e.pointerId;
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
-    syncSphericalFromGoal();
     canvas.setPointerCapture(e.pointerId);
   }
 });
@@ -1184,16 +1092,12 @@ canvas.addEventListener('pointermove',e=>{
   if(orbit.rotating){
     const dx=e.clientX-orbit.lastX, dy=e.clientY-orbit.lastY;
     rotateOrbit(dx,dy);
-    syncSphericalFromGoal();
-    applyOrbitToCamera();
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
     return;
   }
   if(orbit.panning){
     const dx=e.clientX-orbit.lastX, dy=e.clientY-orbit.lastY;
     panOrbit(dx,dy);
-    syncSphericalFromGoal();
-    applyOrbitToCamera();
     orbit.lastX=e.clientX; orbit.lastY=e.clientY;
     return;
   }
@@ -1215,7 +1119,7 @@ canvas.addEventListener('lostpointercapture',()=>{
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   if(orbit.paintingActive) return;
-  zoomOrbit(e.deltaY, e.clientX, e.clientY);
+  zoomOrbit(e.deltaY);
 },{passive:false});
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('auxclick',e=>{if(e.button===1) e.preventDefault()});
@@ -1339,18 +1243,14 @@ function tick(){
   unemployment=population<15?0:clamp((1-jobs/Math.max(population,1))*100,0,100);
 
   // traffic
-  const roadTrafficDirty=[];
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(isRoad(grid[x][y])) grid[x][y].traffic=Math.max(0,grid[x][y].traffic*0.7);
   for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++){
     const t=grid[x][y]; if(!isZone(t)||!t.level) continue;
     for(const [a,b] of neighbors4(x,y)) if(isRoad(grid[a][b])){
-      const prev=grid[a][b].traffic;
       grid[a][b].traffic=Math.min(100,grid[a][b].traffic+t.level*2);
-      if(Math.abs(grid[a][b].traffic-prev)>12) roadTrafficDirty.push([a,b]);
     }
   }
-  if(day%8===0){ for(let x=0;x<COLS;x++)for(let y=0;y<ROWS;y++) if(isRoad(grid[x][y])&&grid[x][y].traffic>20) roadTrafficDirty.push([x,y]); }
-  for(const [x,y] of roadTrafficDirty) upsertStructure(x,y);
+  /* Skip frequent road mesh rebuilds — traffic tint is cosmetic only */
 
   // demand
   const jobRatio=jobs/Math.max(population,1), popRatio=population/Math.max(jobs,1);
@@ -1455,7 +1355,7 @@ function updateInspect(pos){
 }
 
 function updateUI(pr,wr,waster){
-  if(!Number.isFinite(money)) money=0;
+  if(!Number.isFinite(money)) money=55000;
   const m=document.getElementById('stat-money'); m.textContent='$'+Math.round(money).toLocaleString(); m.className='val'+(money<0?' bad':'');
   document.getElementById('stat-pop').textContent=population.toLocaleString();
   document.getElementById('stat-jobs').textContent=jobs.toLocaleString();
@@ -1529,9 +1429,11 @@ window.addEventListener('resize',resize); resize(); updateCamera();
 
 function projectLabels(){
   const w=wrap.clientWidth,h=wrap.clientHeight;
+  const hide=orbit.goal.radius>70;
   for(const el of labelEls){
+    if(hide){el.style.display='none';continue}
     const v=new THREE.Vector3(el._lm.x+0.5,1.2,el._lm.y+0.5); v.project(camera);
-    if(v.z<-1||v.z>1||Math.abs(v.x)>1.35||Math.abs(v.y)>1.35){el.style.display='none';continue}
+    if(v.z>1||Math.abs(v.x)>1.2||Math.abs(v.y)>1.2){el.style.display='none';continue}
     el.style.display='block'; el.style.left=((v.x*0.5+0.5)*w)+'px'; el.style.top=((-v.y*0.5+0.5)*h)+'px';
   }
 }
@@ -1561,7 +1463,9 @@ if(guideBtn) guideBtn.onclick=()=>{ if(guideEl) guideEl.classList.add('hidden');
 try{ if(localStorage.getItem('metroTorontoGuide')==='1' && guideEl) guideEl.classList.add('hidden'); }catch(_){}
 
 applySeasonLook();
-rebuildGround(); rebuildAllStructures(); setSpeed(1); animate();
+rebuildGround(); rebuildAllStructures(); setSpeed(1);
+updateUI(1,1,1);
+animate();
 log('Metro Builder Toronto ready. Highway 401 spans the north — harbour ahead.');
 log('Tip: Connect a street south from the 401, zone R Low beside it, add power + water.');
 log('Tip: LMB paint · RMB orbit · MMB / Shift+LMB / Space+LMB pan · wheel zoom · WASD/arrows pan.');
