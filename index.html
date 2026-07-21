@@ -4180,11 +4180,17 @@ function tickDisasters(svc){
       if(alertKind!=='bankrupt') showAlert('fire', 'Fire outbreak — place <b>Fire Halls</b> nearby and fund Fire. Flames spread without coverage.');
     }
   }
-  /* Spread / extinguish */
+  /* Spread / extinguish — only developed buildings burn (not roads/empty) */
   const toIgnite=[];
   burningTiles=0;
   forEachActive((x,y,t)=>{
     if(!t.burning) return;
+    /* Roads used to ignite and chain across the whole network → absurd "Fires active" counts */
+    if(!isZone(t) || t.level<=0){
+      t.burning=false;
+      upsertStructure(x,y);
+      return;
+    }
     burningTiles++;
     const cover=infAt('fire',x,y)*fundFire;
     if(cover>0.45 || firePower>2 && cover>0.2){
@@ -4196,14 +4202,14 @@ function tickDisasters(svc){
     if(Math.random()<0.18*(1-cover)){
       for(const [a,b] of neighbors4(x,y)){
         const n=grid[a][b];
-        if(((isZone(n)&&n.level>0)||isRoad(n)) && !n.burning && infAt('fire',a,b)*fundFire<0.4) toIgnite.push(a,b);
+        if(isZone(n)&&n.level>0 && !n.burning && infAt('fire',a,b)*fundFire<0.4) toIgnite.push(a,b);
       }
     }
-    if(isZone(t)&&t.level>0&&Math.random()<0.12){ t.level=Math.max(0,t.level-1); upsertStructure(x,y); }
+    if(Math.random()<0.12){ t.level=Math.max(0,t.level-1); upsertStructure(x,y); }
   });
   for(let i=0;i<toIgnite.length;i+=2){
     const t=grid[toIgnite[i]][toIgnite[i+1]];
-    if(!t.burning){ t.burning=true; upsertStructure(toIgnite[i],toIgnite[i+1]); burningTiles++; }
+    if(isZone(t)&&t.level>0 && !t.burning){ t.burning=true; upsertStructure(toIgnite[i],toIgnite[i+1]); burningTiles++; }
   }
   if(burningTiles===0 && alertKind==='fire') hideAlert();
 
