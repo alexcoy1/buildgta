@@ -55,8 +55,8 @@ header.board::after{
   background:linear-gradient(90deg,var(--ttc) 0%, var(--ttc) 28%, transparent 70%);
 }
 .brand{
-  font-family:var(--display); font-weight:800; letter-spacing:.04em;
-  text-transform:uppercase; font-size:14px; color:var(--ink); margin-right:10px;
+  font-family:var(--display); font-weight:800; letter-spacing:.05em;
+  text-transform:uppercase; font-size:15px; color:var(--ink); margin-right:12px;
 }
 .brand span{color:var(--ttc)}
 .stat{display:flex;flex-direction:column;padding:2px 11px;border-left:1px solid var(--line);min-width:64px}
@@ -120,8 +120,8 @@ aside.panel{
   display:flex; flex-direction:column; gap:14px; overflow-y:auto; z-index:6;
 }
 .panel h3{
-  font-family:var(--display); font-size:10px; text-transform:uppercase; letter-spacing:.16em;
-  color:var(--lake); margin:0 0 8px; font-weight:700;
+  font-family:var(--display); font-size:10px; text-transform:uppercase; letter-spacing:.18em;
+  color:var(--lake); margin:0 0 9px; font-weight:700;
 }
 .rci-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .roundel{
@@ -355,15 +355,15 @@ aside.panel{
 .cat.locked{opacity:.32; pointer-events:none}
 
 .toast-stack{
-  position:absolute; bottom:72px; left:50%; transform:translateX(-50%); z-index:8;
-  display:flex; flex-direction:column-reverse; gap:6px; align-items:center;
-  pointer-events:none; width:auto; max-width:min(320px, calc(100% - 28px));
+  position:absolute; bottom:auto; top:12px; left:auto; right:12px; transform:none; z-index:8;
+  display:flex; flex-direction:column; gap:5px; align-items:flex-end;
+  pointer-events:none; width:auto; max-width:min(280px, calc(100% - 24px));
 }
 .toast{
   background:rgba(10,20,28,.9); border:1px solid rgba(62,207,122,.28); border-left:3px solid var(--good);
-  color:var(--ink); padding:6px 11px; border-radius:8px; font-size:11px; font-weight:600;
+  color:var(--ink); padding:5px 10px; border-radius:8px; font-size:10.5px; font-weight:600;
   box-shadow:0 8px 22px rgba(0,0,0,.35); animation:toastIn .22s var(--ease); backdrop-filter:blur(10px);
-  line-height:1.35; text-align:center; max-width:320px; width:max-content;
+  line-height:1.35; text-align:left; max-width:280px; width:max-content;
 }
 .toast.landmark{border-color:rgba(208,18,45,.35); border-left-color:var(--ttc)}
 .toast.warn{border-color:rgba(239,193,90,.35); border-left-color:var(--warn); color:#f3e0a8}
@@ -1954,17 +1954,19 @@ function pickGroundPoint(cx,cy){
   return null;
 }
 
-/* Daylight city look — directional sun carries form; avoid ACES/sRGB black crush */
-const ambient=new THREE.AmbientLight(0xc8d8e4, 0.62);
+/* Filmic harbour daylight — soft sun + cool sky bounce; never ACES / near-black ambient */
+const ambient=new THREE.AmbientLight(0xd4e4ec, 0.55);
 scene.add(ambient);
-const sun=new THREE.DirectionalLight(0xfff2dc, 1.45);
-sun.position.set(48,62,28);
+const sun=new THREE.DirectionalLight(0xfff4e4, 1.38);
+sun.position.set(52,68,24);
 sun.castShadow=false;
 scene.add(sun);
-const hemi=new THREE.HemisphereLight(0xb8d4e8, 0x4a6340, 0.48);
+const hemi=new THREE.HemisphereLight(0xc8e0f0, 0x5a7848, 0.58);
 scene.add(hemi);
-const rim=new THREE.DirectionalLight(0x90b0c0, 0.32);
-rim.position.set(-40,22,-30); scene.add(rim);
+const rim=new THREE.DirectionalLight(0xa8c8d4, 0.28);
+rim.position.set(-44,26,-34); scene.add(rim);
+const fill=new THREE.DirectionalLight(0xe8f0f4, 0.22);
+fill.position.set(-18,36,42); scene.add(fill);
 
 /* Shared geometries — keep draw cost down while allowing cylinders/domes/fillets */
 const geoCache=new Map();
@@ -1979,61 +1981,132 @@ function sphGeo(r,ws,hs){ return geo('s|'+r+'|'+(ws||10)+'|'+(hs||8), ()=>new TH
 function coneGeo(r,h,seg){ return geo('n|'+r+'|'+h+'|'+(seg||6), ()=>new THREE.ConeGeometry(r,h,seg||6)); }
 function torGeo(r,t,rs,ts){ return geo('t|'+r+'|'+t+'|'+(rs||8)+'|'+(ts||12), ()=>new THREE.TorusGeometry(r,t,rs||8,ts||12)); }
 
-/* Shared materials + canvas facade textures (realistic look, few draw states) */
+/* Shared materials + canvas atlases (Toronto facades / asphalt / grass — few draw states) */
 const matCache=new Map();
 const texCache=new Map();
+function _seedRand(s){ let x=s|0; return()=>{ x^=x<<13; x^=x>>>17; x^=x<<5; return ((x>>>0)%1000)/1000; }; }
+function makeSurfaceTexture(kind){
+  const key='surf|'+kind;
+  if(texCache.has(key)) return texCache.get(key);
+  const c=document.createElement('canvas'); c.width=128; c.height=128;
+  const ctx=c.getContext('2d');
+  const rnd=_seedRand(kind==='grass'?7:kind==='soil'?11:kind==='shore'?13:kind==='asphalt'?17:19);
+  if(kind==='grass'){
+    ctx.fillStyle='rgb(108,138,88)'; ctx.fillRect(0,0,128,128);
+    for(let i=0;i<900;i++){
+      const v=70+rnd()*50|0;
+      ctx.fillStyle=`rgb(${70+v*0.35|0},${95+v*0.45|0},${55+v*0.2|0})`;
+      ctx.fillRect(rnd()*128|0, rnd()*128|0, 2+rnd()*3|0, 1+rnd()*2|0);
+    }
+  } else if(kind==='soil'){
+    ctx.fillStyle='rgb(118,112,96)'; ctx.fillRect(0,0,128,128);
+    for(let i=0;i<600;i++){
+      const v=rnd()*40|0;
+      ctx.fillStyle=`rgb(${110+v},${100+v*0.8|0},${82+v*0.5|0})`;
+      ctx.fillRect(rnd()*128|0, rnd()*128|0, 3, 2);
+    }
+  } else if(kind==='shore'){
+    ctx.fillStyle='rgb(148,146,128)'; ctx.fillRect(0,0,128,128);
+    for(let i=0;i<500;i++){
+      ctx.fillStyle=`rgba(180,178,160,${0.2+rnd()*0.4})`;
+      ctx.fillRect(rnd()*128|0, rnd()*128|0, 4+rnd()*6|0, 2);
+    }
+  } else if(kind==='asphalt'){
+    ctx.fillStyle='rgb(62,66,72)'; ctx.fillRect(0,0,128,128);
+    for(let i=0;i<1400;i++){
+      const v=rnd()*28|0;
+      ctx.fillStyle=`rgb(${48+v},${52+v},${56+v})`;
+      ctx.fillRect(rnd()*128|0, rnd()*128|0, 1+rnd()*2|0, 1);
+    }
+    /* faint aggregate flecks */
+    for(let i=0;i<80;i++){
+      ctx.fillStyle=`rgba(160,158,150,${0.08+rnd()*0.12})`;
+      ctx.fillRect(rnd()*128|0, rnd()*128|0, 2, 1);
+    }
+  } else if(kind==='ravine'){
+    ctx.fillStyle='rgb(58,108,72)'; ctx.fillRect(0,0,128,128);
+    for(let i=0;i<700;i++){
+      ctx.fillStyle=`rgb(${40+rnd()*40|0},${80+rnd()*50|0},${48+rnd()*30|0})`;
+      ctx.fillRect(rnd()*128|0, rnd()*128|0, 2+rnd()*4|0, 2);
+    }
+  } else {
+    ctx.fillStyle='rgb(120,124,118)'; ctx.fillRect(0,0,128,128);
+    for(let i=0;i<400;i++){
+      const v=rnd()*30|0;
+      ctx.fillStyle=`rgb(${100+v},${104+v},${98+v})`;
+      ctx.fillRect(rnd()*128|0, rnd()*128|0, 3, 2);
+    }
+  }
+  const tex=new THREE.CanvasTexture(c);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.repeat.set(1.15, 1.15);
+  tex.anisotropy=4;
+  if(THREE.LinearEncoding!==undefined) tex.encoding=THREE.LinearEncoding;
+  tex.needsUpdate=true;
+  texCache.set(key,tex);
+  return tex;
+}
 function makeFacadeTexture(kind){
   const key=kind;
   if(texCache.has(key)) return texCache.get(key);
-  const c=document.createElement('canvas'); c.width=64; c.height=128;
+  const c=document.createElement('canvas'); c.width=128; c.height=256;
   const ctx=c.getContext('2d');
+  const rnd=_seedRand(kind.charCodeAt(0)*31+kind.length*17);
   /* Bright neutral base — material.color tints; stays readable without ACES */
-  ctx.fillStyle='rgb(210,214,218)'; ctx.fillRect(0,0,64,128);
+  ctx.fillStyle='rgb(214,218,222)'; ctx.fillRect(0,0,128,256);
   if(kind==='glass'){
-    for(let y=4;y<124;y+=7){
-      for(let x=3;x<61;x+=8){
-        const lit=Math.random()>0.4;
-        ctx.fillStyle=lit?`rgba(255,236,190,${0.55+Math.random()*0.35})`:`rgba(18,32,48,${0.55+Math.random()*0.3})`;
-        ctx.fillRect(x,y,5,5);
+    /* Toronto glass curtain — tall rhythm + soft sky reflection band */
+    ctx.fillStyle='rgb(168,188,204)'; ctx.fillRect(0,0,128,256);
+    for(let y=6;y<248;y+=9){
+      for(let x=5;x<123;x+=11){
+        const lit=rnd()>0.42;
+        ctx.fillStyle=lit?`rgba(255,238,198,${0.5+rnd()*0.4})`:`rgba(14,28,42,${0.5+rnd()*0.35})`;
+        ctx.fillRect(x,y,7,6);
+        ctx.fillStyle='rgba(220,235,245,0.12)'; ctx.fillRect(x,y,3,6);
       }
+      ctx.fillStyle='rgba(40,55,70,0.22)'; ctx.fillRect(0,y+7,128,1);
     }
-    ctx.fillStyle='rgba(210,230,245,0.18)'; ctx.fillRect(0,0,20,128);
+    ctx.fillStyle='rgba(210,230,245,0.22)'; ctx.fillRect(0,0,36,256);
   } else if(kind==='brick'){
-    for(let y=2;y<126;y+=5){
-      const off=(y/5|0)%2?2:0;
-      for(let x=off;x<64;x+=8){
-        const v=12+Math.random()*22|0;
-        ctx.fillStyle=`rgb(${150+v},${140+v*0.7|0},${130+v*0.5|0})`;
-        ctx.fillRect(x,y,7,4);
+    /* Victorian / Annex brick with limestone lintels */
+    for(let y=2;y<254;y+=6){
+      const off=(y/6|0)%2?3:0;
+      for(let x=off;x<128;x+=10){
+        const v=10+rnd()*28|0;
+        ctx.fillStyle=`rgb(${138+v},${118+v*0.65|0},${105+v*0.45|0})`;
+        ctx.fillRect(x,y,9,5);
       }
     }
-    for(let y=6;y<120;y+=11){
-      for(let x=5;x<58;x+=14){
-        ctx.fillStyle=Math.random()>0.5?'rgba(255,236,180,0.7)':'rgba(22,30,40,0.65)';
-        ctx.fillRect(x,y,4,5);
+    for(let y=10;y<240;y+=14){
+      for(let x=8;x<118;x+=16){
+        ctx.fillStyle=rnd()>0.45?'rgba(255,236,185,0.72)':'rgba(18,26,36,0.7)';
+        ctx.fillRect(x,y,6,7);
+        ctx.fillStyle='rgba(200,190,170,0.35)'; ctx.fillRect(x-1,y-1,8,1);
       }
     }
   } else if(kind==='house'){
-    ctx.fillStyle='rgb(188,186,180)'; ctx.fillRect(0,0,64,128);
-    for(let y=18;y<100;y+=28){
-      for(let x=10;x<54;x+=22){
-        ctx.fillStyle='rgba(35,55,75,0.82)'; ctx.fillRect(x,y,12,14);
-        ctx.fillStyle='rgba(255,230,160,0.42)'; ctx.fillRect(x+1,y+1,10,6);
+    ctx.fillStyle='rgb(196,192,182)'; ctx.fillRect(0,0,128,256);
+    for(let y=28;y<190;y+=36){
+      for(let x=16;x<110;x+=36){
+        ctx.fillStyle='rgba(28,48,68,0.85)'; ctx.fillRect(x,y,18,22);
+        ctx.fillStyle='rgba(255,232,165,0.45)'; ctx.fillRect(x+2,y+2,14,8);
+        ctx.strokeStyle='rgba(220,215,200,0.5)'; ctx.strokeRect(x+0.5,y+0.5,17,21);
       }
     }
-    ctx.fillStyle='rgba(90,60,40,0.92)'; ctx.fillRect(26,96,12,28);
+    ctx.fillStyle='rgba(88,58,38,0.94)'; ctx.fillRect(52,198,24,52);
   } else if(kind==='ind'){
-    for(let y=6;y<120;y+=10){
-      ctx.fillStyle=`rgba(0,0,0,${0.1+Math.random()*0.1})`; ctx.fillRect(0,y,64,2);
-      for(let x=6;x<58;x+=12){
-        ctx.fillStyle='rgba(30,38,32,0.6)'; ctx.fillRect(x,y+2,8,5);
+    ctx.fillStyle='rgb(150,142,128)'; ctx.fillRect(0,0,128,256);
+    for(let y=10;y<240;y+=14){
+      ctx.fillStyle=`rgba(0,0,0,${0.08+rnd()*0.1})`; ctx.fillRect(0,y,128,2);
+      for(let x=10;x<118;x+=16){
+        ctx.fillStyle='rgba(24,32,28,0.55)'; ctx.fillRect(x,y+3,10,7);
       }
     }
   } else {
-    for(let y=5;y<120;y+=9){
-      for(let x=4;x<60;x+=9){
-        ctx.fillStyle=Math.random()>0.5?'rgba(255,228,160,0.48)':'rgba(22,32,44,0.55)';
-        ctx.fillRect(x,y,6,6);
+    for(let y=8;y<244;y+=11){
+      for(let x=6;x<120;x+=12){
+        ctx.fillStyle=rnd()>0.5?'rgba(255,230,168,0.5)':'rgba(18,28,40,0.58)';
+        ctx.fillRect(x,y,8,8);
       }
     }
   }
@@ -2063,25 +2136,30 @@ function mat(hex, opacity, kind){
   const key=k+'|'+(hex>>>0)+'|'+op;
   let m=matCache.get(key);
   if(!m){
-    /* Phong for form; soft emissive floor — never rely on broken instance vertexColors */
+    /* Phong/Lambert for form; soft emissive floor — never broken instance vertexColors */
     const em=((hex>>>0)&0xfefefe)>>2;
     if(k==='flat'||op<1){
       m=new THREE.MeshLambertMaterial({
         color:hex>>>0, transparent:op<1, opacity:op, depthWrite:op>=1,
-        emissive:em, emissiveIntensity:0.12
+        emissive:em, emissiveIntensity:0.14
       });
-    } else if(k==='asphalt'||k==='curb'){
+    } else if(k==='asphalt'){
       m=new THREE.MeshLambertMaterial({
-        color:hex>>>0, emissive:em, emissiveIntensity:0.08
+        color:hex>>>0, map:makeSurfaceTexture('asphalt'),
+        emissive:em, emissiveIntensity:0.1
+      });
+    } else if(k==='curb'){
+      m=new THREE.MeshLambertMaterial({
+        color:hex>>>0, emissive:0x282420, emissiveIntensity:0.1
       });
     } else {
-      const ry=k==='glass'?2.2:(k==='house'?1.05:1.5);
+      const ry=k==='glass'?2.4:(k==='house'?1.1:1.65);
       m=new THREE.MeshPhongMaterial({
         color:hex>>>0, map:facadeMap(k, ry),
-        emissive:k==='glass'?0x152028:em,
-        emissiveIntensity:k==='glass'?0.14:0.1,
-        shininess:k==='glass'?48:18,
-        specular:k==='glass'?0x8899aa:0x333333
+        emissive:k==='glass'?0x182830:em,
+        emissiveIntensity:k==='glass'?0.16:0.12,
+        shininess:k==='glass'?56:20,
+        specular:k==='glass'?0x90a8b8:0x3a3a3a
       });
     }
     matCache.set(key,m);
@@ -2089,17 +2167,17 @@ function mat(hex, opacity, kind){
   return m;
 }
 
-/* Lake Ontario underlay — Phong so water catches light */
+/* Lake Ontario underlay — calm harbour teal with soft specular */
 const waterMat=new THREE.MeshPhongMaterial({
-  color:0x2a9aac, transparent:true, opacity:0.88,
-  emissive:0x0a3040, emissiveIntensity:0.22,
-  shininess:64, specular:0x88c8d8
+  color:0x2498aa, transparent:true, opacity:0.9,
+  emissive:0x0c3848, emissiveIntensity:0.26,
+  shininess:78, specular:0x9ad0e0
 });
 const waterPlane=new THREE.Mesh(new THREE.PlaneGeometry(COLS+28,ROWS+28), waterMat);
 waterPlane.rotation.x=-Math.PI/2; waterPlane.position.set(COLS/2,-0.85,ROWS/2); scene.add(waterPlane);
 const harbourMat=new THREE.MeshPhongMaterial({
-  color:0x1a6080, transparent:true, opacity:0.45, depthWrite:false,
-  emissive:0x082030, emissiveIntensity:0.2, shininess:42, specular:0x6aa8b8
+  color:0x1a6888, transparent:true, opacity:0.42, depthWrite:false,
+  emissive:0x0a2838, emissiveIntensity:0.24, shininess:52, specular:0x78b8c8
 });
 const harbourPlane=new THREE.Mesh(new THREE.PlaneGeometry(22,12), harbourMat);
 const _isl=geoLabel('Toronto Islands', Math.floor(COLS*0.49), Math.floor(ROWS*0.46));
@@ -2107,13 +2185,14 @@ harbourPlane.rotation.x=-Math.PI/2; harbourPlane.position.set(_isl[0],-0.72,_isl
 
 function applySeasonLook(){
   /* Fixed harbour daylight — calendar seasons do not shift lights/sky/fog */
-  ambient.color.setHex(0xd0e0e8); ambient.intensity=0.62;
-  sun.color.setHex(0xfff8ec); sun.intensity=1.55;
-  sun.position.set(48,62,28);
-  hemi.color.setHex(0xc0dce8); hemi.groundColor.setHex(0x5a7a40); hemi.intensity=0.5;
-  rim.color.setHex(0xa0c0cc); rim.intensity=0.32;
+  ambient.color.setHex(0xd4e4ec); ambient.intensity=0.55;
+  sun.color.setHex(0xfff4e4); sun.intensity=1.38;
+  sun.position.set(52,68,24);
+  hemi.color.setHex(0xc8e0f0); hemi.groundColor.setHex(0x5a7848); hemi.intensity=0.58;
+  rim.color.setHex(0xa8c8d4); rim.intensity=0.28;
+  fill.color.setHex(0xe8f0f4); fill.intensity=0.22;
   const fogBase=FOG_DENSITY;
-  scene.fog.color.setHex(0x4a8090); scene.fog.density=fogBase*(LARGE_MAP?0.95:0.82);
+  scene.fog.color.setHex(0x4a8090); scene.fog.density=fogBase*(LARGE_MAP?0.92:0.8);
   scene.background.setHex(0x3e7080);
   renderer.setClearColor(0x3e7080);
 }
@@ -2141,10 +2220,11 @@ let groundShoreMesh=null, groundUrbanMesh=null, groundIslandMesh=null;
 const structureRoot=new THREE.Group(); scene.add(structureRoot);
 const agentRoot=new THREE.Group(); scene.add(agentRoot);
 const MAX_CARS=56, MAX_PPL=40;
-const carMat=new THREE.MeshLambertMaterial({color:0xd8dde2, emissive:0x303038, emissiveIntensity:0.2});
+/* Soft car body — slightly tapered box reads as vehicle at city scale */
+const carMat=new THREE.MeshLambertMaterial({color:0xd8dde2, emissive:0x303038, emissiveIntensity:0.22});
 const pplMat=mat(0xf0d2a0);
-const carMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.22,0.1,0.38), carMat, MAX_CARS);
-const pplMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(0.08,0.2,0.08), pplMat, MAX_PPL);
+const carMesh=new THREE.InstancedMesh(boxGeo(0.2,0.09,0.36), carMat, MAX_CARS);
+const pplMesh=new THREE.InstancedMesh(cylGeo(0.035,0.04,0.18,6), pplMat, MAX_PPL);
 carMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 pplMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 carMesh.frustumCulled=false; pplMesh.frustumCulled=false;
@@ -2609,7 +2689,7 @@ function buildFullMapLod(){
     tex.generateMipmaps=true;
     tex.needsUpdate=true;
     const mat=new THREE.MeshLambertMaterial({
-      map:tex, emissive:0x0c1814, emissiveIntensity:0.1,
+      map:tex, emissive:0x102018, emissiveIntensity:0.12,
       depthWrite:true
     });
     mapLodMesh=new THREE.Mesh(new THREE.PlaneGeometry(COLS, ROWS), mat);
@@ -2626,16 +2706,30 @@ function buildFullMapLod(){
 function rebuildGround(){
   if(LARGE_MAP) buildFullMapLod();
   if(!groundMesh){
-    const landMat=new THREE.MeshLambertMaterial({color:0x6e8f5a, emissive:0x1a2814, emissiveIntensity:0.1});
-    const shoreMat=new THREE.MeshLambertMaterial({color:0x8a9078, emissive:0x202418, emissiveIntensity:0.08});
-    const urbanMat=new THREE.MeshLambertMaterial({color:0x7a7e78, emissive:0x181818, emissiveIntensity:0.08});
-    const islandMat=new THREE.MeshLambertMaterial({color:0x4a8a48, emissive:0x142814, emissiveIntensity:0.12});
-    const waterTileMat=new THREE.MeshLambertMaterial({
-      color:0x2a8fa3, emissive:0x0a3040, emissiveIntensity:0.16
+    const landMat=new THREE.MeshLambertMaterial({
+      color:0x7a9a68, map:makeSurfaceTexture('grass'),
+      emissive:0x1c2818, emissiveIntensity:0.12
+    });
+    const shoreMat=new THREE.MeshLambertMaterial({
+      color:0x9aa090, map:makeSurfaceTexture('shore'),
+      emissive:0x222418, emissiveIntensity:0.1
+    });
+    const urbanMat=new THREE.MeshLambertMaterial({
+      color:0x888c86, map:makeSurfaceTexture('soil'),
+      emissive:0x1a1a18, emissiveIntensity:0.1
+    });
+    const islandMat=new THREE.MeshLambertMaterial({
+      color:0x5a9a58, map:makeSurfaceTexture('grass'),
+      emissive:0x183018, emissiveIntensity:0.14
+    });
+    const waterTileMat=new THREE.MeshPhongMaterial({
+      color:0x2a94a8, emissive:0x0c3848, emissiveIntensity:0.2,
+      shininess:48, specular:0x78b8c8
     });
     /* Protected ravine corridor — flat colour mark, not extruded river gorge */
     const ravMat=new THREE.MeshLambertMaterial({
-      color:0x3a6a48, emissive:0x102818, emissiveIntensity:0.12
+      color:0x3e7250, map:makeSurfaceTexture('ravine'),
+      emissive:0x142c1c, emissiveIntensity:0.14
     });
     const tileGeo=new THREE.BoxGeometry(0.98,1,0.98);
     /* Pool sized exactly for STREAM_MAX_R window — never silently drop tiles */
@@ -2872,12 +2966,17 @@ function upsertStructure(x,y,opts){
     plaza.position.y=0.1; g.add(plaza);
     const treeN=def.parkId==='highpark'?4:(def.parkName?3:2);
     for(let i=0;i<treeN;i++){
-      const trunk=new THREE.Mesh(cylGeo(0.028,0.04,0.22,6), mat(0x5a4030,1,'flat'));
-      const foliage=new THREE.Mesh(sphGeo(0.16+i*0.015, 7, 6), mat(i%2?0x2d5a30:0x3f6e38,1,'flat'));
-      const canopy=new THREE.Mesh(sphGeo(0.11, 6, 5), mat(0x4a7a40,1,'flat'));
+      const trunk=new THREE.Mesh(cylGeo(0.026,0.038,0.24,6), mat(0x5a4030,1,'flat'));
+      const r1=0.15+i*0.018, r2=0.11+i*0.012;
+      const foliage=new THREE.Mesh(sphGeo(r1, 8, 6), mat(i%2?0x2d5a30:0x3f6e38,1,'flat'));
+      const canopy=new THREE.Mesh(sphGeo(r2, 7, 5), mat(0x4a7a40,1,'flat'));
+      const canopy2=new THREE.Mesh(sphGeo(r2*0.75, 6, 5), mat(0x568848,1,'flat'));
       const px=(noise2(x*3+i,y)-0.5)*0.55, pz=(noise2(x,y*3+i)-0.5)*0.55;
-      trunk.position.set(px,0.2,pz); foliage.position.set(px,0.42,pz); canopy.position.set(px+0.04,0.5,pz-0.03);
-      g.add(trunk); g.add(foliage); g.add(canopy);
+      trunk.position.set(px,0.2,pz);
+      foliage.position.set(px,0.44,pz);
+      canopy.position.set(px+0.05,0.52,pz-0.04);
+      canopy2.position.set(px-0.04,0.48,pz+0.05);
+      g.add(trunk); g.add(foliage); g.add(canopy); g.add(canopy2);
     }
     if(def.parkId){
       const bench=new THREE.Mesh(boxGeo(0.3,0.05,0.1), mat(0x6a5040,1,'flat'));
@@ -2922,18 +3021,18 @@ function upsertStructure(x,y,opts){
     const stack2=stack.clone(); stack2.position.set(-0.12,1.0,0.12); stack2.scale.set(0.85,0.85,0.85); g.add(stack2);
     g.position.set(x+0.5,elev,y+0.5); mesh=g;
   }
-  /* ---- Roads: OpenTTD join bits + two-way markings matching car lanes ---- */
+  /* ---- Roads: OpenTTD join bits + continuous asphalt + soft curbs ---- */
   else if(isRoad(t)){
     const g=new THREE.Group();
     const wide=t.type==='avenue'||t.type==='highway'||t.type==='hwybridge';
-    const laneW=wide?0.86:0.72; /* full two-way carriageway */
+    const laneW=wide?0.9:0.74; /* full two-way carriageway */
     const overWater=bridge&&(t.terrain==='ravine'||t.terrain==='water');
-    const deckH=overWater?0.14:(elev>0.3?0.1:0.08);
+    const deckH=overWater?0.15:(elev>0.3?0.11:0.085);
     const col=tileColor(t);
     const asphalt=mat(col,1,'asphalt');
-    const curbMat=mat(0x9a9890,1,'curb');
-    const lineMat=mat(0xe8e4d0,1,'flat');
-    const yellowMat=mat(0xf0d050,1,'flat');
+    const curbMat=mat(0xa8a498,1,'curb');
+    const lineMat=mat(0xece8d8,1,'flat');
+    const yellowMat=mat(0xf2d458,1,'flat');
     /* Bitmask: E=1 W=2 S=4 N=8 (OpenTTD-style) */
     const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
     const bits=[1,2,4,8];
@@ -2955,8 +3054,8 @@ function upsertStructure(x,y,opts){
     /* Continuous asphalt hub — always covers tile center so joins don't gap */
     {
       const hub=new THREE.Mesh(
-        (isCross||isTee||isCurve)?cylGeo(laneW*0.52, laneW*0.52, deckH, 12)
-          : boxGeo(laneW*0.95, deckH, laneW*0.95),
+        (isCross||isTee||isCurve)?cylGeo(laneW*0.54, laneW*0.54, deckH, 14)
+          : boxGeo(laneW*0.98, deckH, laneW*0.98),
         asphalt
       );
       hub.position.y=deckH/2; g.add(hub);
@@ -2969,7 +3068,7 @@ function upsertStructure(x,y,opts){
       const dElev=nElev-elev;
       const alongX=dirs[di][0]!==0;
       const arm=new THREE.Mesh(
-        boxGeo(alongX?0.56:laneW, deckH, alongX?laneW:0.56),
+        boxGeo(alongX?0.58:laneW, deckH, alongX?laneW:0.58),
         asphalt
       );
       arm.position.set(dirs[di][0]*0.5, deckH/2+dElev*0.25-0.002, dirs[di][1]*0.5);
@@ -2996,24 +3095,49 @@ function upsertStructure(x,y,opts){
       const cornerPos=[[0.3,0.3],[0.3,-0.3],[-0.3,0.3],[-0.3,-0.3]];
       for(let ci=0;ci<4;ci++){
         if(!(linked[corners[ci][0]]&&linked[corners[ci][1]])) continue;
-        const fillet=new THREE.Mesh(cylGeo(laneW*0.48, laneW*0.48, deckH*0.98, 10), asphalt);
+        const fillet=new THREE.Mesh(cylGeo(laneW*0.5, laneW*0.5, deckH*0.98, 12), asphalt);
         fillet.position.set(cornerPos[ci][0], deckH/2, cornerPos[ci][1]);
         g.add(fillet);
       }
     }
-    /* Clean markings: ONE dashed center line on straights only (no edge hashes / curve ticks / floating curbs) */
-    const markY=deckH+0.025;
+    /* Soft curbs on open edges only (no floating hashes) */
+    const curbY=deckH*0.45;
+    const curbH=deckH*0.85;
+    for(let di=0;di<4;di++){
+      if(linked[di]) continue;
+      const alongX=dirs[di][0]!==0;
+      const curb=new THREE.Mesh(
+        boxGeo(alongX?0.06:laneW*0.92, curbH, alongX?laneW*0.92:0.06),
+        curbMat
+      );
+      curb.position.set(dirs[di][0]*(laneW*0.5+0.01), curbY, dirs[di][1]*(laneW*0.5+0.01));
+      g.add(curb);
+    }
+    /* Clean markings: dashed center on straights; solid yellow on avenues/highways */
+    const markY=deckH+0.022;
     const markMat=wide?yellowMat:lineMat;
     markMat.polygonOffset=true; markMat.polygonOffsetFactor=-2; markMat.polygonOffsetUnits=-2;
     if(straightEW){
       for(let k=-1;k<=1;k++){
-        const dash=new THREE.Mesh(boxGeo(0.18,0.008,0.035), markMat);
-        dash.position.set(k*0.3, markY, 0); g.add(dash);
+        const dash=new THREE.Mesh(boxGeo(wide?0.22:0.16, 0.007, wide?0.04:0.032), markMat);
+        dash.position.set(k*0.28, markY, 0); g.add(dash);
+      }
+      if(wide){
+        [-1,1].forEach(side=>{
+          const edge=new THREE.Mesh(boxGeo(0.78, 0.006, 0.018), lineMat);
+          edge.position.set(0, markY, side*(laneW*0.38)); g.add(edge);
+        });
       }
     } else if(straightNS){
       for(let k=-1;k<=1;k++){
-        const dash=new THREE.Mesh(boxGeo(0.035,0.008,0.18), markMat);
-        dash.position.set(0, markY, k*0.3); g.add(dash);
+        const dash=new THREE.Mesh(boxGeo(wide?0.04:0.032, 0.007, wide?0.22:0.16), markMat);
+        dash.position.set(0, markY, k*0.28); g.add(dash);
+      }
+      if(wide){
+        [-1,1].forEach(side=>{
+          const edge=new THREE.Mesh(boxGeo(0.018, 0.006, 0.78), lineMat);
+          edge.position.set(side*(laneW*0.38), markY, 0); g.add(edge);
+        });
       }
     }
     if((t.type==='transit'||t.type==='transitbridge')&&(straightEW||straightNS)){
@@ -3024,20 +3148,20 @@ function upsertStructure(x,y,opts){
       stripe.position.y=markY+0.001; g.add(stripe);
     }
     if(overWater){
-      /* Flat bridge — light rails only, no tall piers */
+      /* Flat bridge — light rails only, continuous with deck */
       [-1,1].forEach(side=>{
-        const rail=new THREE.Mesh(boxGeo(laneW*0.95, 0.04, 0.03), mat(0x8a8880,1,'flat'));
-        rail.position.set(0, deckH+0.08, side*(laneW*0.5+0.02)); g.add(rail);
+        const rail=new THREE.Mesh(boxGeo(laneW*0.96, 0.045, 0.028), mat(0x8e8c84,1,'flat'));
+        rail.position.set(0, deckH+0.09, side*(laneW*0.5+0.02)); g.add(rail);
       });
     } else if(bridge){
       [-1,1].forEach(side=>{
-        const rail=new THREE.Mesh(boxGeo(laneW*0.7, 0.03, 0.025), mat(0x8a8880,1,'flat'));
+        const rail=new THREE.Mesh(boxGeo(laneW*0.72, 0.032, 0.024), mat(0x8e8c84,1,'flat'));
         rail.position.set(0, deckH+0.08, side*(laneW*0.48)); g.add(rail);
       });
     }
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
-  /* ---- Buildings / zones — organic C:S-style silhouettes ---- */
+  /* ---- Buildings / zones — C:S / SimCity silhouettes (levels & scaffolds unchanged) ---- */
   else {
     const g=new THREE.Group();
     const high=def&&def.density==='high';
@@ -3055,6 +3179,7 @@ function upsertStructure(x,y,opts){
     const isMidrise=isZone(t)&&((high&&lv===2)||(high&&lv===3&&t.landValue<65));
     const isTower=isZone(t)&&((high&&lv>=4)||(high&&lv>=3&&t.landValue>=65)||(def&&def.zone==='off'&&lv>=3));
     const roundVar=noise2(x*1.7,y*2.3);
+    const massVar=noise2(x*2.1+3,y*1.4);
     let kind='flat';
     if(unbuilt||constructing||abandoned) kind='flat';
     else if(isHouse||isCondo) kind=isCondo?'brick':'house';
@@ -3075,6 +3200,8 @@ function upsertStructure(x,y,opts){
       if(lv>=3){
         const crane=new THREE.Mesh(cylGeo(0.03,0.03,scaffoldH*0.9,5), mat(0xd0a040,1,'flat'));
         crane.position.set(w*0.35, scaffoldH*0.55, -w*0.35); g.add(crane);
+        const boom=new THREE.Mesh(boxGeo(0.55,0.04,0.04), mat(0xd0a040,1,'flat'));
+        boom.position.set(w*0.1, scaffoldH*0.95, -w*0.35); g.add(boom);
       }
       if(t.burning){
         const flame=new THREE.Mesh(coneGeo(0.12,0.35,6), mat(0xff6020,0.85,'flat'));
@@ -3122,29 +3249,60 @@ function upsertStructure(x,y,opts){
         const stack=new THREE.Mesh(cylGeo(0.06,0.08,0.55+lv*0.2,8), mat(0x6a6860,1,'flat'));
         stack.position.set(-w*0.15,h*0.55,w*0.2); g.add(stack);
       }
-    } else if(isTower){
-      /* Cylindrical / chamfered glass tower + round podium */
-      const podH=Math.min(0.5, h*0.18);
-      const podium=new THREE.Mesh(cylGeo(w*0.72, w*0.72, podH, 14), mat(col,1,'brick'));
-      podium.position.y=podH/2; g.add(podium);
-      const shaftR=w*(roundVar>0.45?0.42:0.38);
-      const shaft=new THREE.Mesh(cylGeo(shaftR*0.92, shaftR, h-podH*0.5, 12), mat(col, unbuilt?0.4:(abandoned?0.7:1), kind));
-      shaft.position.y=podH*0.6+(h-podH*0.5)/2; g.add(shaft);
-      if(roundVar>0.55){
-        const wing=new THREE.Mesh(boxGeo(w*0.55,h*0.55,w*0.35), mat(col,1,kind));
-        wing.position.set(w*0.28, podH+h*0.3, 0); g.add(wing);
+      if(lv>=3){
+        const shed2=new THREE.Mesh(boxGeo(w*0.4,h*0.35,w*0.4), mat(col,1,'ind'));
+        shed2.position.set(w*0.05,h*0.2,-w*0.28); g.add(shed2);
       }
-      const crown=new THREE.Mesh(cylGeo(shaftR*0.55, shaftR*0.7, 0.18+lv*0.03, 10), mat(0xd8dce2,1,'glass'));
-      crown.position.y=h+0.08; g.add(crown);
+    } else if(isTower){
+      /* Podium + setback shaft + crown — downtown Toronto glass massing */
+      const podH=Math.min(0.55, h*0.16);
+      const podium=new THREE.Mesh(
+        massVar>0.5?cylGeo(w*0.74, w*0.74, podH, 14):boxGeo(w*1.05, podH, w*1.05),
+        mat(col,1,'brick')
+      );
+      podium.position.y=podH/2; g.add(podium);
+      const setback=lv>=4?0.88:0.94;
+      const shaftR=w*(roundVar>0.4?0.44:0.4)*setback;
+      const shaftH=h-podH*0.55;
+      const shaft=new THREE.Mesh(
+        roundVar>0.5
+          ? cylGeo(shaftR*0.9, shaftR, shaftH, 12)
+          : boxGeo(shaftR*1.7, shaftH, shaftR*1.7),
+        mat(col, abandoned?0.7:1, kind)
+      );
+      shaft.position.y=podH*0.65+shaftH/2; g.add(shaft);
+      /* Mid setback ring for L4+ skyline read */
+      if(lv>=4 && h>3){
+        const mid=new THREE.Mesh(
+          boxGeo(shaftR*1.95, 0.12, shaftR*1.95),
+          mat(0xc8d0d8,1,'glass')
+        );
+        mid.position.y=podH+shaftH*0.55; g.add(mid);
+        const upper=new THREE.Mesh(
+          roundVar>0.55?cylGeo(shaftR*0.72, shaftR*0.78, shaftH*0.38, 10)
+            : boxGeo(shaftR*1.4, shaftH*0.38, shaftR*1.4),
+          mat(col,1,kind)
+        );
+        upper.position.y=podH+shaftH*0.55+shaftH*0.22; g.add(upper);
+      } else if(massVar>0.6){
+        const wing=new THREE.Mesh(boxGeo(w*0.5,h*0.48,w*0.32), mat(col,1,kind));
+        wing.position.set(w*0.3, podH+h*0.28, 0); g.add(wing);
+      }
+      const crown=new THREE.Mesh(cylGeo(shaftR*0.5, shaftR*0.68, 0.16+lv*0.03, 10), mat(0xd8dce2,1,'glass'));
+      crown.position.y=h+0.06; g.add(crown);
       if(lv>=4){
-        const spire=new THREE.Mesh(cylGeo(0.03,0.05,0.28+lv*0.06,6), mat(0xc8d0d8,1,'flat'));
-        spire.position.y=h+0.35; g.add(spire);
+        const spire=new THREE.Mesh(cylGeo(0.028,0.045,0.3+lv*0.07,6), mat(0xc8d0d8,1,'flat'));
+        spire.position.y=h+0.38; g.add(spire);
       }
     } else if(isHouse){
       const body=new THREE.Mesh(boxGeo(w*0.85,h,w*0.7), mat(col, abandoned?0.7:1, kind));
       body.position.y=h/2; g.add(body);
       const bay=new THREE.Mesh(cylGeo(w*0.18,w*0.18,h*0.55,8), mat(col,1,kind));
       bay.position.set(w*0.32,h*0.3,0); g.add(bay);
+      if(massVar>0.55){
+        const porch=new THREE.Mesh(boxGeo(w*0.35,0.08,0.18), mat(0xc8c0b0,1,'flat'));
+        porch.position.set(0,0.28,w*0.42); g.add(porch);
+      }
       const roof=new THREE.Mesh(coneGeo(w*0.72,0.3,4), mat(abandoned?0x4a4038:0x5a3828,1,'flat'));
       roof.position.y=h+0.12; roof.rotation.y=Math.PI/4; g.add(roof);
       const chim=new THREE.Mesh(cylGeo(0.04,0.045,0.2,6), mat(0x7a6050,1,'flat'));
@@ -3154,6 +3312,10 @@ function upsertStructure(x,y,opts){
       body.position.y=h/2; g.add(body);
       const corner=new THREE.Mesh(cylGeo(w*0.12,w*0.12,h,8), mat(col,1,kind));
       corner.position.set(w*0.42,h/2,w*0.38); g.add(corner);
+      if(roundVar>0.5){
+        const corner2=new THREE.Mesh(cylGeo(w*0.1,w*0.1,h,8), mat(col,1,kind));
+        corner2.position.set(-w*0.4,h/2,-w*0.35); g.add(corner2);
+      }
       const parapet=new THREE.Mesh(cylGeo(w*0.52,w*0.52,0.06,12), mat(0x6a6058,1,'flat'));
       parapet.position.y=h+0.02; g.add(parapet);
       if(def&&def.zone==='com'){
@@ -3161,18 +3323,24 @@ function upsertStructure(x,y,opts){
         awning.position.set(0,0.42,w/2+0.04); g.add(awning);
       }
     } else if(isLowMid||isMidrise){
-      const body=new THREE.Mesh(boxGeo(w*0.92,h,w*0.92), mat(col, abandoned?0.7:1, kind));
-      body.position.y=h/2; g.add(body);
-      /* Rounded corner columns */
+      /* Street wall + rounded corners + optional setback crown */
+      const body=new THREE.Mesh(boxGeo(w*0.92,h*0.78,w*0.92), mat(col, abandoned?0.7:1, kind));
+      body.position.y=h*0.39; g.add(body);
       [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([sx,sz])=>{
-        const c=new THREE.Mesh(cylGeo(0.06,0.06,h,6), mat(col,1,kind));
-        c.position.set(sx*w*0.42, h/2, sz*w*0.42); g.add(c);
+        const c=new THREE.Mesh(cylGeo(0.065,0.065,h*0.78,6), mat(col,1,kind));
+        c.position.set(sx*w*0.42, h*0.39, sz*w*0.42); g.add(c);
       });
-      const parapet=new THREE.Mesh(cylGeo(w*0.55,w*0.55,0.07,12), mat(0x6a5850,1,'flat'));
+      if(lv>=3 || isMidrise){
+        const upper=new THREE.Mesh(boxGeo(w*0.78,h*0.28,w*0.78), mat(col,1,kind==='brick'?'glass':kind));
+        upper.position.y=h*0.78+h*0.14; g.add(upper);
+      }
+      const parapet=new THREE.Mesh(cylGeo(w*0.5,w*0.5,0.07,12), mat(0x6a5850,1,'flat'));
       parapet.position.y=h+0.02; g.add(parapet);
       if(def&&def.zone==='com'){
         const awning=new THREE.Mesh(boxGeo(w*0.85,0.04,0.12), mat(0x3a5060,1,'flat'));
         awning.position.set(0,0.55,w/2+0.04); g.add(awning);
+        const store=new THREE.Mesh(boxGeo(w*0.88,0.35,0.04), mat(0x1a2830,1,'glass'));
+        store.position.set(0,0.28,w*0.46); g.add(store);
       }
     } else if(unbuilt){
       const pad=new THREE.Mesh(cylGeo(0.42,0.42,0.04,12), mat(def&&def.color?parseInt(def.color.replace('#',''),16):0x888888,0.4,'flat'));
