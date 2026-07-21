@@ -1835,9 +1835,9 @@ function stepCamera(dt){
   orbit.spherical.radius+=(orbit.goal.radius-orbit.spherical.radius)*sk;
   orbit.target.lerp(orbit.targetGoal, tk);
   applyOrbitToCamera();
+  /* Ground chunks only — never stream buildings (that caused disappear/reappear + bad stats) */
   if(LARGE_MAP){
     try{ refreshGroundInstances(); }catch(err){ console.warn('ground refresh', err); }
-    try{ refreshStructureStream(false); }catch(err){ console.warn('structure stream', err); }
   }
 }
 
@@ -2535,9 +2535,9 @@ function roadDeckElev(x,y,t){
   return 0.12;
 }
 
-/* Near-camera 3D tiles stream in a window; full extent always drawn via LOD plane.
-   CRITICAL: stream window is VISUAL ONLY — never delete tileMap entries, never zero
-   zone levels, never recount pop/jobs from what's currently meshed. */
+/* Near-camera ground tiles stream in a window; full extent always drawn via LOD plane.
+   Buildings are NEVER streamed — all sparse tileMap structures stay meshed so they
+   don't flicker and stats (from full tileMap) stay stable. */
 const CHUNK=56;
 const STREAM_MAX_R=72; /* must match pool — keep rebuilds cheap so paint stays responsive */
 const STREAM_SIDE=STREAM_MAX_R*2+1;
@@ -2548,15 +2548,17 @@ let mapLodMesh=null;
 let _groundRefreshAt=0;
 let _structRefreshAt=0;
 
+/* Ground stream only — use targetGoal + fixed radius so lerping camera doesn't thrash chunks */
 function getStreamWindow(){
   if(!LARGE_MAP) return {x0:0, x1:COLS-1, y0:0, y1:ROWS-1, r:0, key:'full'};
-  const cx=clamp(Math.floor(orbit.target.x), 0, COLS-1);
-  const cy=clamp(Math.floor(orbit.target.z), 0, ROWS-1);
-  const r=Math.min(STREAM_MAX_R, Math.max(CHUNK, Math.floor(orbit.spherical.radius*0.85)));
-  const x0=Math.max(0, cx-r), x1=Math.min(COLS-1, cx+r);
-  const y0=Math.max(0, cy-r), y1=Math.min(ROWS-1, cy+r);
-  const q=8;
-  const key=((x0/q)|0)+','+((y0/q)|0)+','+((x1/q)|0)+','+((y1/q)|0)+','+((r/q)|0);
+  const cx=clamp(Math.floor(orbit.targetGoal.x), 0, COLS-1);
+  const cy=clamp(Math.floor(orbit.targetGoal.z), 0, ROWS-1);
+  const r=STREAM_MAX_R;
+  const q=24; /* large quanta = rare ground refresh while panning */
+  const qx=((cx/q)|0)*q, qy=((cy/q)|0)*q;
+  const x0=Math.max(0, qx-r), x1=Math.min(COLS-1, qx+r+q);
+  const y0=Math.max(0, qy-r), y1=Math.min(ROWS-1, qy+r+q);
+  const key=qx+','+qy;
   return {x0,x1,y0,y1,r,cx,cy,key};
 }
 function inStreamWindow(x,y,w){
@@ -2829,15 +2831,6 @@ function upsertStructure(x,y,opts){
     return;
   }
   const force=!!(opts&&opts.force);
-  /* Visual stream: out-of-window tiles keep sim state; only the mesh is dropped */
-  if(LARGE_MAP && !force){
-    const win=getStreamWindow();
-    if(!inStreamWindow(x,y,win)){
-      const oldOut=structureKey.get(key);
-      if(oldOut){structureRoot.remove(oldOut); disposeObject3D(oldOut); structureKey.delete(key)}
-      return;
-    }
-  }
   const old=structureKey.get(key);
   const sig=structureSig(t)+(isRoad(t)?'|'+roadNeighborSig(x,y):'');
   /* Keep existing mesh if nothing visual changed — stops flicker */
@@ -2972,7 +2965,7 @@ function upsertStructure(x,y,opts){
     for(let di=0;di<4;di++){
       if(!linked[di]) continue;
       const nx=x+dirs[di][0], ny=y+dirs[di][1];
-      const nElev=roadDeckElev(nx,ny,grid[nx][ny]);
+      const nElev=roadDeckElev(nx,ny,peekTile(nx,ny));
       const dElev=nElev-elev;
       const alongX=dirs[di][0]!==0;
       const arm=new THREE.Mesh(
@@ -3216,38 +3209,13 @@ function upsertStructure(x,y,opts){
 function rebuildAllStructures(){
   clearStructures();
   structureChunkKey='';
-  /* LARGE_MAP: only mesh the stream window — full tileMap still owns sim/pop */
-  if(LARGE_MAP) refreshStructureStream(true);
-  else forEachActive((x,y,t)=>{ if(t.type!=='empty') upsertStructure(x,y,{force:true}); });
+  /* Mesh every non-empty tileMap cell — sparse city, no camera LOD on buildings */
+  forEachActive((x,y,t)=>{ if(t.type!=='empty') upsertStructure(x,y,{force:true}); });
   structuresDirty=false;
 }
 
-/* Visual-only building LOD: dispose/restore meshes from tileMap. Never touches levels/pop. */
-function refreshStructureStream(force){
-  if(!LARGE_MAP) return;
-  const win=getStreamWindow();
-  const now=performance.now();
-  if(!force && win.key===structureChunkKey && now-_structRefreshAt<90) return;
-  _structRefreshAt=now;
-  structureChunkKey=win.key;
-
-  for(const [key, mesh] of [...structureKey.entries()]){
-    const parts=key.split(',');
-    const x=parts[0]|0, y=parts[1]|0;
-    if(!inStreamWindow(x,y,win)){
-      structureRoot.remove(mesh);
-      disposeObject3D(mesh);
-      structureKey.delete(key);
-    }
-  }
-
-  for(const [k,t] of tileMap){
-    if(t.type==='empty') continue;
-    const x=(k/ROWS)|0, y=k%ROWS;
-    if(!inStreamWindow(x,y,win)) continue;
-    upsertStructure(x,y);
-  }
-}
+/* Kept as no-op for callers — buildings stay resident; streaming caused flicker + stat churn */
+function refreshStructureStream(_force){ /* intentionally empty */ }
 
 /* ---- UI catalog ---- */
 const catsEl=document.getElementById('cats');
@@ -3987,7 +3955,8 @@ function tick(){
   /* Job tallies by sector for RCI valves */
   let jobsBy={com:0,ind:0,off:0,res:0};
   for(let zi=0;zi<zones.length;zi+=2){
-    const t=grid[zones[zi]][zones[zi+1]]; const def=toolById[t.type];
+    const t=peekTile(zones[zi], zones[zi+1]); if(!t) continue;
+    const def=toolById[t.type];
     if(!t.level||!def) continue;
     if(def.zone==='com') jobsBy.com+=t.level*(def.density==='high'?20:12);
     else if(def.zone==='ind') jobsBy.ind+=t.level*14;
@@ -3999,7 +3968,8 @@ function tick(){
 
   for(let zi=0;zi<zones.length;zi+=2){
     const x=zones[zi], y=zones[zi+1];
-    const t=grid[x][y]; const def=toolById[t.type];
+    const t=peekTile(x,y); if(!t) continue;
+    const def=toolById[t.type];
     if(!def) continue;
     const road=hasRoadAccess(x,y);
     const powered=t.powered&&powerRatio>0.35;
@@ -4094,8 +4064,8 @@ function tick(){
   walkSpots=[];
   for(let zi=0;zi<zones.length;zi+=2){
     const x=zones[zi], y=zones[zi+1];
-    const t=grid[x][y];
-    if(t.level>0){
+    const t=peekTile(x,y);
+    if(t && t.level>0){
       walkSpots.push(x+0.3+Math.random()*0.4, y+0.3+Math.random()*0.4);
       if(hasRoadAccess(x,y)) walkSpots.push(x+0.5, y+0.12);
     }
@@ -4174,8 +4144,8 @@ function tickDisasters(svc){
     if(cands.length>=2){
       const i=((Math.random()*cands.length/2)|0)*2;
       const bx=cands[i], by=cands[i+1];
-      grid[bx][by].burning=true;
-      upsertStructure(bx,by);
+      const bt=peekTile(bx,by);
+      if(bt){ bt.burning=true; upsertStructure(bx,by); }
       log('Fire outbreak! Build Fire Halls to contain the spread.', true);
       if(alertKind!=='bankrupt') showAlert('fire', 'Fire outbreak — place <b>Fire Halls</b> nearby and fund Fire. Flames spread without coverage.');
     }
@@ -4201,15 +4171,15 @@ function tickDisasters(svc){
     }
     if(Math.random()<0.18*(1-cover)){
       for(const [a,b] of neighbors4(x,y)){
-        const n=grid[a][b];
-        if(isZone(n)&&n.level>0 && !n.burning && infAt('fire',a,b)*fundFire<0.4) toIgnite.push(a,b);
+        const n=peekTile(a,b);
+        if(n && isZone(n)&&n.level>0 && !n.burning && infAt('fire',a,b)*fundFire<0.4) toIgnite.push(a,b);
       }
     }
     if(Math.random()<0.12){ t.level=Math.max(0,t.level-1); upsertStructure(x,y); }
   });
   for(let i=0;i<toIgnite.length;i+=2){
-    const t=grid[toIgnite[i]][toIgnite[i+1]];
-    if(isZone(t)&&t.level>0 && !t.burning){ t.burning=true; upsertStructure(toIgnite[i],toIgnite[i+1]); burningTiles++; }
+    const t=peekTile(toIgnite[i],toIgnite[i+1]);
+    if(t && isZone(t)&&t.level>0 && !t.burning){ t.burning=true; upsertStructure(toIgnite[i],toIgnite[i+1]); burningTiles++; }
   }
   if(burningTiles===0 && alertKind==='fire') hideAlert();
 
@@ -4227,8 +4197,8 @@ function tickDisasters(svc){
     });
     if(cands.length>=2){
       const i=((Math.random()*cands.length/2)|0)*2;
-      grid[cands[i]][cands[i+1]].flooded=true;
-      upsertStructure(cands[i],cands[i+1]);
+      const ft=peekTile(cands[i],cands[i+1]);
+      if(ft){ ft.flooded=true; upsertStructure(cands[i],cands[i+1]); }
       log('Flooding near the waterfront — add Drain Pipes / Treatment.', true);
       if(alertKind!=='bankrupt'&&alertKind!=='fire') showAlert('flood', 'Flood risk — shoreline is under water. Build <b>Drain Pipes</b> and <b>Treatment</b> plants.');
     }
@@ -4238,14 +4208,17 @@ function tickDisasters(svc){
     floodedTiles++;
     let localDrain=toolById[t.type]?.id==='drain';
     if(!localDrain){
-      for(const [a,b] of neighbors4(x,y)) if(grid[a][b].type==='drain'||toolById[grid[a][b].type]?.treat){ localDrain=true; break; }
+      for(const [a,b] of neighbors4(x,y)){
+        const nt=peekTile(a,b);
+        if(nt && (nt.type==='drain'||toolById[nt.type]?.treat)){ localDrain=true; break; }
+      }
     }
     if(!drainWeak || localDrain || infra.drains+infra.treat*2>=drainNeed){
       if(Math.random()<0.35 || localDrain){ t.flooded=false; upsertStructure(x,y); floodedTiles--; }
     } else if(Math.random()<0.08){
       for(const [a,b] of neighbors4(x,y)){
-        const n=grid[a][b];
-        if((n.terrain==='land'||n.terrain==='ravine')&&!n.flooded&&nearTerrain(a,b,'water',3)&&(isZone(n)||n.type==='empty')){
+        const n=peekTile(a,b);
+        if(n && (n.terrain==='land'||n.terrain==='ravine')&&!n.flooded&&nearTerrain(a,b,'water',3)&&(isZone(n)||n.type==='empty')){
           n.flooded=true; upsertStructure(a,b); floodedTiles++; break;
         }
       }
