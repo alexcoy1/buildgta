@@ -4212,15 +4212,15 @@ function pickTile(cx,cy){
 }
 
 function isBuildableTerrain(tile){
-  /* Only open land is buildable. Water / void / ravine / islands = protected or unbuildable. */
-  return !!tile && tile.terrain==='land' && !tile.island;
+  /* Open land (including Toronto Islands) is buildable. Water / void / ravine need bridges or stay unbuildable. */
+  return !!tile && tile.terrain==='land';
 }
 function canPlace(def, tile){
   if(!def||!tile) return false;
   if(def.bridge) return tile.terrain==='ravine'||tile.terrain==='water'||tile.terrain==='land';
   if(def.id==='harbor'||def.id==='ferry') return isBuildableTerrain(tile);
   if(tile.terrain==='water'||tile.terrain==='void') return false;
-  if(tile.terrain==='ravine'||tile.island) return false;
+  if(tile.terrain==='ravine') return false;
   return isBuildableTerrain(tile);
 }
 
@@ -4276,10 +4276,6 @@ function applyTool(pos){
     }
     if(tile.terrain==='ravine'){
       showToast('Protected ravine — use a <b>bridge</b> to cross.', 'warn', 2200);
-      return;
-    }
-    if(tile.island){
-      showToast('Islands are protected parkland.', 'warn', 2000);
       return;
     }
     if(tile.terrain==='void'){
@@ -5144,7 +5140,7 @@ function updateInspect(pos){
   const t=grid[pos.x][pos.y]; const def=toolById[t.type];
   let name=def?def.label:(t.type==='empty'?'Vacant':'Unknown');
   if(t.parkName) name=t.parkName;
-  const terrain=t.terrain==='water'?'Lake Ontario':t.terrain==='ravine'?'Protected ravine':t.island?'Island (protected)':t.terrain==='void'?'Off-map':'Land';
+  const terrain=t.terrain==='water'?'Lake Ontario':t.terrain==='ravine'?'Protected ravine':t.island?'Toronto Islands':t.terrain==='void'?'Off-map':'Land';
   let extra='';
   if(isZone(t)){
     const stage=t.level<=0?'Vacant':(t.buildPhase>0?'Building…':(t.abandoned?'Abandoned L'+t.level:'L'+t.level));
