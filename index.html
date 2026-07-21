@@ -3972,10 +3972,9 @@ function tick(){
     const def=toolById[t.type];
     if(!def) continue;
     const road=hasRoadAccess(x,y);
-    const powered=t.powered&&powerRatio>0.35;
-    const watered=t.watered&&waterRatio>0.35;
+    const powered=!!t.powered && powerRatio>0.35;
+    const watered=!!t.watered && waterRatio>0.35;
     let d=demand.r; if(def.zone==='com') d=demand.c; else if(def.zone==='ind') d=demand.i; else if(def.zone==='off') d=demand.o;
-    const idx=x*ROWS+y;
     const desir=zoneDesirability(x,y,t,def);
 
     /* Soft cap from services/land value, hard cap from zone density tool */
@@ -4000,65 +3999,84 @@ function tick(){
     cap=Math.min(cap, toolMax);
     t.densityCap=cap;
 
-    const prevL=t.level;
+    const prevL=t.level|0;
+    const prevAb=!!t.abandoned;
+    const prevPhase=t.buildPhase|0;
     const accessOk=(t.tripFail||0)<4;
     if(t.level>0) t.zoneAge=(t.zoneAge||0)+1;
 
-    /* Stage 0→1: construction start — road + demand (utilities optional for first shack) */
-    if(road && accessOk && t.level===0 && d>-20 && !t.burning && !t.flooded){
-      const early=population<100?1.35:1;
-      let chance=(0.5+(d/100)*0.3+desir*0.12)*early*(gameSettings.growthMult||1);
-      if(population<30) chance=Math.min(0.96, chance*1.2);
-      if(Math.random()<chance){ t.level=1; t.zoneAge=0; t.abandoned=false; }
+    /* Scaffold countdown — visual only, no level change */
+    if((t.buildPhase|0)>0){
+      t.buildPhase--;
+      if(t.buildPhase===0 && prevL>0) grew.push([x,y]);
+      continue; /* don't grow/decay mid-construction — stops flicker */
     }
-    /* Upgrades L→L+1: need utilities, demand, desirability; scaffold blocks re-roll */
-    else if(road && powered && watered && accessOk && t.level>0 && t.level<cap && d>8 && !t.burning && !t.flooded && !(t.buildPhase>0) && !t.abandoned){
-      const needAge=t.level===1?6:t.level===2?10:t.level===3?14:18; /* settle before densify */
-      if((t.zoneAge||0)>=needAge){
-        let chance=(0.08+(d/100)*0.16+desir*0.14+(t.landValue/100)*0.05)*(gameSettings.growthMult||1);
-        if(population<150) chance*=1.35;
-        if(infAt('park',x,y)>0&&def.zone==='res') chance*=1.2;
-        if(infAt('police',x,y)>0) chance*=1.1;
-        if(tripStats.rate<0.45) chance*=0.65;
-        if(happiness<35) chance*=0.55;
-        if(t.level>=3 && def.density!=='high') chance*=0.35; /* low zones rarely hit L3 */
-        if(Math.random()<chance){ t.level++; t.zoneAge=0; }
+
+    /* Vacant abandoned lots only revive when fully serviced (no instant regrow loop) */
+    if(t.level<=0 && t.abandoned){
+      if(road && powered && watered && accessOk && d>-5 && !t.burning && !t.flooded){
+        t.abandoned=false;
+        t.zoneAge=0;
+      }
+      continue;
+    }
+
+    /* Stage 0→1: road + demand; utilities preferred but not required for first shack */
+    if(t.level===0 && road && accessOk && d>-15 && !t.burning && !t.flooded){
+      const early=population<100?1.15:1;
+      let chance=(0.18+(d/100)*0.12+desir*0.08)*early*(gameSettings.growthMult||1);
+      if(population<30) chance=Math.min(0.45, chance*1.15);
+      if(!powered||!watered) chance*=0.55; /* slower without util — still can start */
+      if(day%2!==(x+y)%2) chance*=0.35; /* stagger so whole street doesn't pop same tick */
+      if(Math.random()<chance){
+        t.level=1; t.zoneAge=0; t.abandoned=false;
+        t.buildPhase=3;
       }
     }
-    /* Downgrade / abandon when services fail */
-    else if(t.level>0){
+    /* Upgrades: need utilities, demand, desirability, settle time */
+    else if(t.level>0 && road && powered && watered && accessOk && t.level<cap && d>8 && !t.burning && !t.flooded && !t.abandoned){
+      const needAge=t.level===1?8:t.level===2?12:t.level===3?16:20;
+      if((t.zoneAge||0)>=needAge){
+        let chance=(0.05+(d/100)*0.12+desir*0.12+(t.landValue/100)*0.04)*(gameSettings.growthMult||1);
+        if(population<150) chance*=1.2;
+        if(infAt('park',x,y)>0&&def.zone==='res') chance*=1.15;
+        if(infAt('police',x,y)>0) chance*=1.08;
+        if(tripStats.rate<0.45) chance*=0.65;
+        if(happiness<35) chance*=0.55;
+        if(t.level>=3 && def.density!=='high') chance*=0.35;
+        if(Math.random()<chance){
+          t.level++; t.zoneAge=0;
+          t.buildPhase=3+(t.level>=3?2:0)+(t.level>=5?1:0);
+        }
+      }
+    }
+    /* Downgrade only after sustained stress — never thrash L1↔0 every tick */
+    else if(t.level>0 && (t.zoneAge||0)>30){
       let decay=0;
-      if(!road) decay+=0.12;
-      if((t.tripFail||0)>5) decay+=0.06;
-      if(!powered||!watered) decay+=0.045+(t.level>=3?0.03:0);
-      if(d<-35) decay+=0.03;
-      if((t.crime||0)>70&&def.zone==='res') decay+=0.025;
-      if(infAt('fire',x,y)<0.01 && t.level>=3 && population>80) decay+=0.01; /* highrises want fire cover */
-      if(t.burning) decay+=0.1;
-      if(t.flooded) decay+=0.07;
-      if(happiness<25 && t.level>=2) decay+=0.02;
+      if(!road) decay+=0.04;
+      if((t.tripFail||0)>8) decay+=0.025;
+      if(!powered||!watered) decay+=0.012+(t.level>=3?0.01:0);
+      if(d<-45) decay+=0.015;
+      if((t.crime||0)>75&&def.zone==='res') decay+=0.01;
+      if(t.burning) decay+=0.06;
+      if(t.flooded) decay+=0.04;
+      if(happiness<20 && t.level>=2) decay+=0.01;
       if(Math.random()<decay){
         t.level--;
         t.zoneAge=0;
         if(t.level<=0){ t.abandoned=true; t.level=0; }
         else if(!powered||!watered||!road) t.abandoned=true;
-      } else if(powered && watered && road && d>-10 && (t.crime||0)<55){
+      } else if(powered && watered && road && d>-10 && (t.crime||0)<55 && t.abandoned){
         t.abandoned=false;
       }
     }
 
-    if(t.level>prevL){
-      t.buildPhase=3+(t.level>=3?2:0)+(t.level>=5?1:0); /* scaffold then new look */
-      t.abandoned=false;
+    if(t.level!==prevL || !!t.abandoned!==prevAb || ((t.buildPhase|0)>0)!==(prevPhase>0)){
+      if(t.level>prevL) t.abandoned=false;
       grew.push([x,y]);
-    } else if(t.level<prevL){
-      t.buildPhase=0; grew.push([x,y]);
-    } else if((t.buildPhase|0)>0){
-      t.buildPhase--;
-      if(t.buildPhase===0) grew.push([x,y]);
     }
   }
-  for(const [x,y] of grew) upsertStructure(x,y);
+  for(const [x,y] of grew) upsertStructure(x,y,{force:true});
 
   if(day%4===0 || !roadList.length) refreshRoadList();
   walkSpots=[];
@@ -4175,7 +4193,7 @@ function tickDisasters(svc){
         if(n && isZone(n)&&n.level>0 && !n.burning && infAt('fire',a,b)*fundFire<0.4) toIgnite.push(a,b);
       }
     }
-    if(Math.random()<0.12){ t.level=Math.max(0,t.level-1); upsertStructure(x,y); }
+    if(Math.random()<0.04){ t.level=Math.max(0,t.level-1); if(t.level<=0) t.abandoned=true; upsertStructure(x,y,{force:true}); }
   });
   for(let i=0;i<toIgnite.length;i+=2){
     const t=peekTile(toIgnite[i],toIgnite[i+1]);
