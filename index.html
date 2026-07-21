@@ -1575,7 +1575,7 @@ function makeCell(x,y){
     landValue:isWater||isVoid?0:computeLandValue(x,y,code,cityCenter.x,cityCenter.y),
     pollution:0,traffic:0,powered:false,watered:false,crime:0,densityCap:2,
     parkId:null,parkName:null,spec:null,
-    island:isIsland,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false,
+    island:isIsland,buildPhase:0,burning:false,flooded:false,zoneAge:0,abandoned:false,stress:0,
     elev:computeElev(x,y,code,shore)
   };
 }
@@ -2314,8 +2314,8 @@ let groundRavineMesh=null;
 let groundShoreMesh=null, groundUrbanMesh=null, groundIslandMesh=null;
 const structureRoot=new THREE.Group(); scene.add(structureRoot);
 const agentRoot=new THREE.Group(); scene.add(agentRoot);
-const MAX_CARS=56, MAX_PPL=40;
-/* Realistic city-scale agents — InstancedMesh + shared geos; body color via instanceColor (safe), windows = fixed dark mat */
+const MAX_CARS=160, MAX_PPL=120;
+/* Realistic city-scale agents — live counts track population & traffic */
 const carMat=new THREE.MeshLambertMaterial({
   color:0xffffff, emissive:0x282830, emissiveIntensity:0.18
 });
@@ -2373,12 +2373,49 @@ function pickRoadNeighbor(gx,gy,fromX,fromY){
   const nbs=neighbors4(gx,gy);
   for(let i=0;i<nbs.length;i++){
     const a=nbs[i][0], b=nbs[i][1];
-    if(isRoad(grid[a][b])) opts.push([a,b]);
+    const nt=peekTile(a,b);
+    if(nt&&isRoad(nt)) opts.push([a,b]);
   }
   if(!opts.length) return null;
   const fwd=opts.filter(([a,b])=>!(a===fromX&&b===fromY));
   const pool=fwd.length?fwd:opts;
   return pool[(Math.random()*pool.length)|0];
+}
+function refreshWalkSpots(zonesOpt){
+  walkSpots=[];
+  const pushSpot=(x,y,t)=>{
+    if(!t||!(t.level>0)) return;
+    const def=toolById[t.type];
+    if(def&&def.zone==='res'){
+      walkSpots.push(x+0.25+Math.random()*0.5, y+0.25+Math.random()*0.5);
+      if(hasRoadAccess(x,y)) walkSpots.push(x+0.5, y+0.08);
+    } else if(def&&(def.zone==='com'||def.zone==='off'||def.park)){
+      walkSpots.push(x+0.3+Math.random()*0.4, y+0.3+Math.random()*0.4);
+    } else if(isZone(t)){
+      walkSpots.push(x+0.35, y+0.35);
+    }
+  };
+  if(zonesOpt&&zonesOpt.length){
+    for(let zi=0;zi<zonesOpt.length;zi+=2){
+      pushSpot(zonesOpt[zi], zonesOpt[zi+1], peekTile(zonesOpt[zi], zonesOpt[zi+1]));
+    }
+  } else {
+    forEachActive((x,y,t)=>{
+      if(isZone(t)||(toolById[t.type]&&toolById[t.type].park)) pushSpot(x,y,t);
+    });
+  }
+}
+function desiredCarCount(){
+  const roads=Math.max(0, (roadList.length/2)|0);
+  if(roads<1) return 0;
+  const fromTraffic=avgTraffic*0.55+(avgTraffic*avgTraffic)*0.004;
+  const fromPop=population*0.035+jobs*0.02;
+  const fromRoads=Math.min(40, roads*0.12);
+  return clamp(Math.round(fromTraffic+fromPop+fromRoads), 0, MAX_CARS);
+}
+function desiredPeopleCount(){
+  if(population<1) return 0;
+  return clamp(Math.round(population*0.12+jobs*0.04), 0, MAX_PPL);
 }
 function laneOffset(dx, dy){
   /* Right-hand drive: stay beside center line, never on it */
@@ -2415,7 +2452,9 @@ function spawnCar(){
 }
 let walkSpots=[];
 function spawnPerson(){
-  if(population<1 || walkSpots.length<2) return;
+  if(population<1) return;
+  if(walkSpots.length<2) refreshWalkSpots();
+  if(walkSpots.length<2) return;
   let slot=-1; for(let i=0;i<people.length;i++) if(!people[i].alive){slot=i;break}
   if(slot<0) return;
   const k=(Math.random()*walkSpots.length/2|0)*2;
@@ -2428,16 +2467,31 @@ function spawnPerson(){
   if(pplMesh.instanceColor) pplMesh.instanceColor.needsUpdate=true;
 }
 function stepAgents(dt){
-  const wantCars=Math.min(MAX_CARS, Math.floor(4+avgTraffic*0.35+population*0.04+jobs*0.03));
-  const wantPpl=Math.min(MAX_PPL, Math.floor(population*0.08+jobs*0.03));
+  if(!roadList.length && (population>0||jobs>0)) refreshRoadList();
+  if(walkSpots.length<2 && population>0) refreshWalkSpots();
+  const wantCars=desiredCarCount();
+  const wantPpl=desiredPeopleCount();
   let liveC=0, liveP=0;
   for(const c of cars) if(c.alive) liveC++;
   for(const p of people) if(p.alive) liveP++;
+  if(liveC>wantCars){
+    for(let i=0;i<cars.length && liveC>wantCars;i++){
+      if(cars[i].alive && Math.random()<0.35){ cars[i].alive=false; hideCarSlot(i); liveC--; }
+    }
+  }
+  if(liveP>wantPpl){
+    for(let i=0;i<people.length && liveP>wantPpl;i++){
+      if(people[i].alive && Math.random()<0.4){ people[i].alive=false; hideAgentInstance(pplMesh,i); liveP--; }
+    }
+  }
   agentSpawnTimer+=dt;
-  if(agentSpawnTimer>0.35){
+  const spawnEvery=wantCars+wantPpl>40?0.12:0.22;
+  if(agentSpawnTimer>spawnEvery){
     agentSpawnTimer=0;
-    if(liveC<wantCars) spawnCar();
-    if(liveP<wantPpl) spawnPerson();
+    let n=0;
+    while(liveC<wantCars && n<6){ spawnCar(); liveC++; n++; }
+    n=0;
+    while(liveP<wantPpl && n<8){ spawnPerson(); liveP++; n++; }
   }
   for(let i=0;i<cars.length;i++){
     const c=cars[i];
@@ -2446,13 +2500,15 @@ function stepAgents(dt){
     if(c.t>=1){
       const prevX=c.gx, prevY=c.gy;
       c.gx=c.nx; c.gy=c.ny;
-      if(!isRoad(grid[c.gx][c.gy])){ c.alive=false; hideCarSlot(i); continue; }
+      const here=peekTile(c.gx,c.gy);
+      if(!here||!isRoad(here)){ c.alive=false; hideCarSlot(i); continue; }
       const next=pickRoadNeighbor(c.gx,c.gy, prevX, prevY);
       if(!next){ c.alive=false; hideCarSlot(i); continue; }
       const dx=next[0]-c.gx, dy=next[1]-c.gy;
       c.nx=next[0]; c.ny=next[1]; c.t=0;
-      const cong=1+grid[c.nx][c.ny].traffic/70;
-      c.speed=(1.15+Math.random()*1.2)/cong;
+      const nt=peekTile(c.nx,c.ny);
+      const cong=1+((nt&&nt.traffic)||0)/70;
+      c.speed=(1.1+Math.random()*1.25)/cong;
       const lo=laneOffset(dx, dy);
       c.x=c.gx+0.5+lo.ox; c.z=c.gy+0.5+lo.oz;
       c.tx=c.nx+0.5+lo.ox; c.tz=c.ny+0.5+lo.oz;
@@ -2461,7 +2517,7 @@ function stepAgents(dt){
     const px=c.x+(c.tx-c.x)*u, pz=c.z+(c.tz-c.z)*u;
     const ang=Math.atan2(c.tx-c.x, c.tz-c.z);
     const gx=clamp(c.gx|0,0,COLS-1), gy=clamp(c.gy|0,0,ROWS-1);
-    const elevY=roadDeckElev(gx, gy, grid[gx][gy])+0.02;
+    const elevY=roadDeckElev(gx, gy, peekTile(gx,gy))+0.02;
     _agentDummy.position.set(px, elevY, pz);
     _agentDummy.scale.set(1,1,1);
     _agentDummy.rotation.set(0, ang, 0);
@@ -2480,10 +2536,15 @@ function stepAgents(dt){
     if(!p.alive){ hideAgentInstance(pplMesh,i); continue; }
     p.t+=dt*p.speed*0.35;
     if(p.t>=1){
-      if(Math.random()<0.25){ p.alive=false; hideAgentInstance(pplMesh,i); continue; }
+      if(Math.random()<0.2){ p.alive=false; hideAgentInstance(pplMesh,i); continue; }
       p.x=p.tx; p.z=p.tz; p.t=0;
-      p.tx=clamp(p.x+(Math.random()-0.5)*3, 1, COLS-1);
-      p.tz=clamp(p.z+(Math.random()-0.5)*3, 1, ROWS-1);
+      if(walkSpots.length>=2 && Math.random()<0.7){
+        const j=(Math.random()*walkSpots.length/2|0)*2;
+        p.tx=walkSpots[j]; p.tz=walkSpots[j+1];
+      } else {
+        p.tx=clamp(p.x+(Math.random()-0.5)*2.5, 1, COLS-1);
+        p.tz=clamp(p.z+(Math.random()-0.5)*2.5, 1, ROWS-1);
+      }
     }
     const u=p.t;
     const ang=Math.atan2(p.tx-p.x, p.tz-p.z);
@@ -2693,7 +2754,8 @@ function updateCrimeMap(svc){
         const nx=x+dx, ny=y+dy;
         if(!inBounds(nx,ny)) continue;
         const d=Math.hypot(dx,dy); if(d>8) continue;
-        const nt=grid[nx][ny];
+        const nt=peekTile(nx,ny);
+        if(!nt) continue;
         nt.crime=Math.max(0, nt.crime*(1-fundPolice*0.12*(1-d/8)));
       }
     });
@@ -3060,21 +3122,20 @@ function clearStructures(){
 function addWindowEmissive(){ /* disabled — per-window meshes tanked FPS */ }
 
 function structureSig(t){
-  /* Include terrain + deck elev class so bridge↔road joins refresh */
-  return t.type+'|'+t.level+'|'+(t.parkId||'')+'|'+(t.spec||'')+'|'+((t.buildPhase|0)>0?'c':'f')+'|'+(t.burning?'b':'')+'|'+(t.flooded?'w':'')+'|'+(t.abandoned?'a':'')+'|'+t.terrain;
+  /* Visual identity only — omit transient timers that would thrash meshes every tick */
+  return t.type+'|'+t.level+'|'+(t.parkId||'')+'|'+(t.spec||'')+'|'+((t.buildPhase|0)>0?'c':'f')+'|'+(t.burning?'b':'')+'|'+(t.flooded?'w':'')+'|'+(t.abandoned?'a':'');
 }
 function roadNeighborSig(x,y){
-  /* Force road/bridge mesh rebuild when nearby road network / elev changes */
+  /* Force road/bridge mesh rebuild when nearby road network changes (elev is flat/constant) */
   let s='';
-  for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
+  for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
     if(!dx&&!dy) continue;
     const nx=x+dx, ny=y+dy;
     if(!inBounds(nx,ny)){ s+='.'; continue; }
     const nt=peekTile(nx,ny);
-    s+=(nt&&isRoad(nt))?(nt.type[0]+roadDeckElev(nx,ny,nt).toFixed(2)):'-';
+    s+=(nt&&isRoad(nt))?nt.type[0]:'-';
   }
-  const self=peekTile(x,y)||grid[x][y];
-  return s+':'+roadDeckElev(x,y,self).toFixed(2);
+  return s;
 }
 
 function upsertStructure(x,y,opts){
@@ -3086,13 +3147,14 @@ function upsertStructure(x,y,opts){
     if(oldMissing){structureRoot.remove(oldMissing); disposeObject3D(oldMissing); structureKey.delete(key)}
     return;
   }
-  const force=!!(opts&&opts.force);
   const old=structureKey.get(key);
   const sig=structureSig(t)+(isRoad(t)?'|'+roadNeighborSig(x,y):'');
-  /* Keep existing mesh if nothing visual changed — stops flicker */
+  /* Keep existing mesh if nothing visual changed — stops flicker / disappear thrash */
   if(old && t.type!=='empty' && old.userData && old.userData.sig===sig) return;
-  if(old){structureRoot.remove(old); disposeObject3D(old); structureKey.delete(key)}
-  if(t.type==='empty') return;
+  if(t.type==='empty'){
+    if(old){structureRoot.remove(old); disposeObject3D(old); structureKey.delete(key)}
+    return;
+  }
   const def=toolById[t.type];
   const h=structureHeight(t);
   const bridge=def&&def.bridge;
@@ -3966,7 +4028,9 @@ function upsertStructure(x,y,opts){
     g.position.set(x+0.5, elev, y+0.5); mesh=g;
   }
   mesh.userData={x,y,sig};
+  /* Atomic swap — add new before removing old so the tile never blanks a frame */
   structureRoot.add(mesh); structureKey.set(key,mesh);
+  if(old && old!==mesh){ structureRoot.remove(old); disposeObject3D(old); }
 }
 
 function rebuildAllStructures(){
@@ -4767,19 +4831,22 @@ function tick(){
     const prevPhase=t.buildPhase|0;
     const accessOk=(t.tripFail||0)<4;
     if(t.level>0) t.zoneAge=(t.zoneAge||0)+1;
+    t.stress=t.stress|0;
 
-    /* Scaffold countdown — visual only, no level change */
+    /* Scaffold countdown — visual only, no level change; one mesh swap at start + finish */
     if((t.buildPhase|0)>0){
       t.buildPhase--;
       if(t.buildPhase===0 && prevL>0) grew.push([x,y]);
       continue; /* don't grow/decay mid-construction — stops flicker */
     }
 
-    /* Vacant abandoned lots only revive when fully serviced (no instant regrow loop) */
+    /* Vacant abandoned lots only revive after sustained good service (no flip-flop) */
     if(t.level<=0 && t.abandoned){
       if(road && powered && watered && accessOk && d>-5 && !t.burning && !t.flooded){
-        t.abandoned=false;
-        t.zoneAge=0;
+        t.stress=Math.max(0, t.stress-2);
+        if(t.stress<=0){ t.abandoned=false; t.zoneAge=0; }
+      } else {
+        t.stress=Math.min(40, t.stress+1);
       }
       continue;
     }
@@ -4792,44 +4859,49 @@ function tick(){
       if(!powered||!watered) chance*=0.55; /* slower without util — still can start */
       if(day%2!==(x+y)%2) chance*=0.35; /* stagger so whole street doesn't pop same tick */
       if(Math.random()<chance){
-        t.level=1; t.zoneAge=0; t.abandoned=false;
-        t.buildPhase=3;
+        t.level=1; t.zoneAge=0; t.abandoned=false; t.stress=0;
+        t.buildPhase=2; /* short scaffold — one visual swap at end */
       }
     }
     /* Upgrades: need utilities, demand, desirability, settle time */
     else if(t.level>0 && road && powered && watered && accessOk && t.level<cap && d>8 && !t.burning && !t.flooded && !t.abandoned){
-      const needAge=t.level===1?8:t.level===2?12:t.level===3?16:20;
+      const needAge=t.level===1?10:t.level===2?14:t.level===3?18:22;
       if((t.zoneAge||0)>=needAge){
-        let chance=(0.05+(d/100)*0.12+desir*0.12+(t.landValue/100)*0.04)*(gameSettings.growthMult||1);
-        if(population<150) chance*=1.2;
-        if(infAt('park',x,y)>0&&def.zone==='res') chance*=1.15;
-        if(infAt('police',x,y)>0) chance*=1.08;
+        let chance=(0.045+(d/100)*0.1+desir*0.1+(t.landValue/100)*0.035)*(gameSettings.growthMult||1);
+        if(population<150) chance*=1.15;
+        if(infAt('park',x,y)>0&&def.zone==='res') chance*=1.12;
+        if(infAt('police',x,y)>0) chance*=1.06;
         if(tripStats.rate<0.45) chance*=0.65;
         if(happiness<35) chance*=0.55;
         if(t.level>=3 && def.density!=='high') chance*=0.35;
         if(Math.random()<chance){
-          t.level++; t.zoneAge=0;
-          t.buildPhase=3+(t.level>=3?2:0)+(t.level>=5?1:0);
+          t.level++; t.zoneAge=0; t.stress=0;
+          t.buildPhase=2+(t.level>=4?1:0);
         }
       }
+      t.stress=Math.max(0, t.stress-1);
     }
-    /* Downgrade only after sustained stress — never thrash L1↔0 every tick */
-    else if(t.level>0 && (t.zoneAge||0)>30){
-      let decay=0;
-      if(!road) decay+=0.04;
-      if((t.tripFail||0)>8) decay+=0.025;
-      if(!powered||!watered) decay+=0.012+(t.level>=3?0.01:0);
-      if(d<-45) decay+=0.015;
-      if((t.crime||0)>75&&def.zone==='res') decay+=0.01;
-      if(t.burning) decay+=0.06;
-      if(t.flooded) decay+=0.04;
-      if(happiness<20 && t.level>=2) decay+=0.01;
-      if(Math.random()<decay){
+    /* Downgrade only after sustained stress — sticky abandon, never L1↔0 thrash */
+    else if(t.level>0 && (t.zoneAge||0)>40){
+      let bad=0;
+      if(!road) bad+=3;
+      if((t.tripFail||0)>10) bad+=2;
+      if(!powered||!watered) bad+=1+(t.level>=3?1:0);
+      if(d<-50) bad+=2;
+      if((t.crime||0)>80&&def.zone==='res') bad+=1;
+      if(t.burning) bad+=4;
+      if(t.flooded) bad+=3;
+      if(happiness<18 && t.level>=2) bad+=1;
+      if(bad>0) t.stress=Math.min(80, t.stress+bad);
+      else t.stress=Math.max(0, t.stress-2);
+
+      if(t.stress>=28 && Math.random()<0.012+t.stress*0.0004){
         t.level--;
         t.zoneAge=0;
-        if(t.level<=0){ t.abandoned=true; t.level=0; }
-        else if(!powered||!watered||!road) t.abandoned=true;
-      } else if(powered && watered && road && d>-10 && (t.crime||0)<55 && t.abandoned){
+        t.stress=Math.max(12, t.stress-10);
+        if(t.level<=0){ t.abandoned=true; t.level=0; t.stress=20; }
+        else if(!powered||!watered||!road){ t.abandoned=true; t.stress=16; }
+      } else if(t.abandoned && t.stress<=4 && powered && watered && road && d>-10 && (t.crime||0)<60){
         t.abandoned=false;
       }
     }
@@ -4842,15 +4914,7 @@ function tick(){
   for(const [x,y] of grew) upsertStructure(x,y,{force:true});
 
   if(day%4===0 || !roadList.length) refreshRoadList();
-  walkSpots=[];
-  for(let zi=0;zi<zones.length;zi+=2){
-    const x=zones[zi], y=zones[zi+1];
-    const t=peekTile(x,y);
-    if(t && t.level>0){
-      walkSpots.push(x+0.3+Math.random()*0.4, y+0.3+Math.random()*0.4);
-      if(hasRoadAccess(x,y)) walkSpots.push(x+0.5, y+0.12);
-    }
-  }
+  refreshWalkSpots(zones);
 
   if(day%40===0) refreshLandValue();
   const svcScore=(svc.police*40*fundPolice+svc.fire*35*fundFire+(svc.health||0)*50+(svc.edu||0)*40+svc.park*22)/Math.max(population+jobs,50);
